@@ -1,7 +1,6 @@
 // Backend API base URL
-// In development with Vite proxy, you can also use relative URLs like '/api'
-// For production, update this to your backend server URL
-const API_BASE_URL = 'http://localhost:5000'
+// In development we proxy /api to Flask; use a relative base path.
+const API_BASE_URL = '/api'
 
 export const submitCheckout = async (checkoutData) => {
   try {
@@ -30,42 +29,13 @@ export const submitCheckout = async (checkoutData) => {
  * Get all orders from the backend
  * @returns {Promise<Object>} Response object with orders data
  */
-export const getOrders = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/orders`)
-    const data = await response.json()
-
-    if (response.ok && data.success) {
-      return {
-        success: true,
-        data: data.orders || [],
-        count: data.count || 0
-      }
-    }
-
-    return {
-      success: false,
-      error: data.error || 'Failed to fetch orders',
-      data: []
-    }
-  } catch (error) {
-    console.error('Get orders API error:', error)
-    return {
-      success: false,
-      error: 'Network error',
-      message: 'Unable to fetch orders. Please check your connection.',
-      data: []
-    }
-  }
-}
-
 /**
  * Export checkout data to CSV
  * @returns {Promise<Object>} Response object with export status
  */
 export const exportCheckouts = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/export`)
+    const response = await fetch(`${API_BASE_URL}/export`)
     const data = await response.json()
 
     if (response.ok && data.success) {
@@ -96,7 +66,7 @@ export const exportCheckouts = async () => {
  */
 export const healthCheck = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/health`)
+    const response = await fetch(`${API_BASE_URL}/health`)
     const data = await response.json()
 
     return {

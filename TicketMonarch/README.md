@@ -1,6 +1,6 @@
 # TicketMonarch - Full-Stack Web Application
 
-A full-stack web application built with Flask (Python) backend, React with Vite frontend, and SQLite database with CSV import capability.
+A full-stack web application built with Flask (Python) backend, React with Vite frontend, and a MySQL database with CSV import capability.
 
 ## Project Structure
 
@@ -8,7 +8,10 @@ A full-stack web application built with Flask (Python) backend, React with Vite 
 TicketMonarch/
 ├── backend/
 │   ├── app.py              # Flask API server
-│   ├── models.py           # SQLAlchemy database models
+│   ├── models.py           # (legacy) SQLAlchemy models (not used by default)
+│   ├── database.py         # MySQL-based checkout & tracking storage and CSV export
+│   ├── config.py           # MySQL configuration (env-based)
+│   ├── setup_mysql.py      # MySQL database & orders table setup script
 │   └── requirements.txt    # Python dependencies
 ├── frontend/
 │   ├── src/
@@ -20,16 +23,15 @@ TicketMonarch/
 │   ├── vite.config.js      # Vite configuration
 │   └── package.json        # Node.js dependencies
 ├── data/
-│   ├── orders.csv          # CSV file for order data
-│   └── ticketmonarch.db    # SQLite database (created automatically)
+│   └── orders.csv          # (optional) CSV file for legacy order data
 └── README.md               # This file
 ```
 
 ## Features
 
-- **Backend API**: Flask REST API with SQLite database
+- **Backend API**: Flask REST API with MySQL database
 - **Frontend**: React application with Vite for fast development
-- **Database**: SQLite with SQLAlchemy ORM
+- **Database**: MySQL with SQLAlchemy ORM and raw connector utilities
 - **CSV Import**: Import orders from CSV file
 - **CORS Enabled**: Backend configured for frontend communication
 - **Modern UI**: Beautiful, responsive design
@@ -73,7 +75,32 @@ cd frontend
 npm install
 ```
 
-### Step 3: Run the Flask Backend
+### Step 3: Set Up MySQL
+
+1. **Install MySQL Community Server** (if you don't already have it):
+   - Download and install from the official MySQL website.
+   - Make sure the MySQL service is running on your machine.
+
+2. **Create a MySQL user (optional but recommended)**:
+   - You can use the default `root` user, or create a dedicated user.
+   - Ensure the user has permissions to create databases and tables.
+
+3. **Configure environment variables**:
+   - In the project root, copy `.env.example` to `.env`:
+     ```bash
+     cp .env.example .env
+     ```
+   - Update the values (especially `MYSQL_PASSWORD`) to match your local MySQL setup.
+
+4. **Run the MySQL setup script** to create the database and `orders` table:
+   ```bash
+   cd backend
+   python setup_mysql.py
+   ```
+
+This will create the `ticketmonarch_db` database (if it doesn't exist) and an `orders` table that mirrors the existing `Order` model in `models.py`.
+
+### Step 4: Run the Flask Backend
 
 From the backend directory, start the Flask server:
 
@@ -84,7 +111,7 @@ python app.py
 
 The backend API will be running on `http://localhost:5000`
 
-### Step 4: Run the React Frontend
+### Step 5: Run the React Frontend
 
 From the frontend directory, start the development server:
 
@@ -105,40 +132,32 @@ The application should now be running with both frontend and backend connected.
 
 ### Database Setup
 
-The SQLite database (`ticketmonarch.db`) will be automatically created in the `data/` directory when you first run the Flask server. The database schema is defined in `backend/models.py`.
+The MySQL database (`ticketmonarch_db` by default) is created by `backend/setup_mysql.py` and used by both the checkout flow and telemetry tracking (`user_sessions` table).
 
 ## API Endpoints
 
 - `GET /api/health` - Health check endpoint
-- `GET /api/orders` - Get all orders
-- `GET /api/orders/<id>` - Get a specific order by ID
-- `POST /api/orders` - Create a new order
-- `POST /api/orders/import` - Import orders from CSV file
 - `POST /api/checkout` - Submit checkout form data
 - `GET /api/export` - Export checkout data to CSV
+- `POST /api/tracking/mouse` - Submit batched mouse movement telemetry
+- `POST /api/tracking/clicks` - Submit batched click telemetry
+- `POST /api/tracking/keystrokes` - Submit batched keystroke timing telemetry
+- `GET /api/export/tracking` - Export user session tracking data to CSV for RL/ML
 
-## Usage
+## Tracking Data Export for RL/ML Training
 
-1. **Create an Order**: Fill out the form on the frontend and click "Create Order"
-2. **View Orders**: All orders are displayed in the orders section
-3. **Import from CSV**: Click the "Import from CSV" button to import orders from `data/orders.csv`
+Tracking data from `user_sessions` is exported as a CSV suitable for RL pipelines (e.g., SAC/PPO agents with PyTorch or OpenAI Gym):
 
-## CSV Format
+- **Endpoint**: `GET /api/export/tracking`
+- **Output file**: `data/tracking_sessions.csv`
+- **Columns** (one row per session):
+  - `session_id`, `session_start`, `page`
+  - `mouse_movements` (JSON array of `{x, y, t}` samples)
+  - `click_events` (JSON array of click events with timing and targets)
+  - `keystroke_data` (JSON array of timing events for form fields)
+  - `scroll_events`, `form_completion_time`, `browser_info`, `session_metadata` (JSON)
 
-The `orders.csv` file should have the following columns:
-- `customer_name` - Customer's full name
-- `email` - Customer's email address
-- `product_name` - Name of the product/ticket
-- `quantity` - Number of items
-- `price` - Price per item
-- `total` - Total price (quantity × price)
-- `order_date` - Order date (ISO format)
-
-Example:
-```csv
-customer_name,email,product_name,quantity,price,total,order_date
-John Doe,john.doe@example.com,Concert Ticket VIP,2,150.00,300.00,2024-01-15T10:30:00
-```
+In your RL/ML code you can load each row, `json.loads` the JSON columns, and convert them into tensors or time-series features for training SAC/PPO agents.
 
 ## Development
 
