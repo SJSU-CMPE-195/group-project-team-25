@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import SeatSelection from './pages/SeatSelection'
 import Checkout from './pages/Checkout'
 import Confirmation from './pages/Confirmation'
+import DevDashboard from './pages/DevDashboard'
 import './App.css'
 import { initTracking, setTrackingPage } from './services/tracking'
 
@@ -12,6 +13,13 @@ function AppRoutes() {
 
   useEffect(() => {
     const path = location.pathname
+
+    // Don't track on the dev dashboard — it would create its own session
+    if (path.startsWith('/dev')) {
+      setTrackingPage(null)
+      return
+    }
+
     let pageName = 'home'
 
     if (path.startsWith('/seats')) {
@@ -31,6 +39,7 @@ function AppRoutes() {
       <Route path="/seats/:concertId" element={<SeatSelection />} />
       <Route path="/checkout" element={<Checkout />} />
       <Route path="/confirmation" element={<Confirmation />} />
+      <Route path="/dev" element={<DevDashboard />} />
     </Routes>
   )
 }

@@ -313,10 +313,34 @@ def save_user_session(session_id, telemetry):
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 page = VALUES(page),
-                mouse_movements = VALUES(mouse_movements),
-                click_events = VALUES(click_events),
-                keystroke_data = VALUES(keystroke_data),
-                scroll_events = VALUES(scroll_events),
+                mouse_movements = CASE
+                    WHEN VALUES(mouse_movements) IS NOT NULL THEN
+                        JSON_MERGE_PRESERVE(
+                            COALESCE(mouse_movements, JSON_ARRAY()),
+                            VALUES(mouse_movements)
+                        )
+                    ELSE mouse_movements END,
+                click_events = CASE
+                    WHEN VALUES(click_events) IS NOT NULL THEN
+                        JSON_MERGE_PRESERVE(
+                            COALESCE(click_events, JSON_ARRAY()),
+                            VALUES(click_events)
+                        )
+                    ELSE click_events END,
+                keystroke_data = CASE
+                    WHEN VALUES(keystroke_data) IS NOT NULL THEN
+                        JSON_MERGE_PRESERVE(
+                            COALESCE(keystroke_data, JSON_ARRAY()),
+                            VALUES(keystroke_data)
+                        )
+                    ELSE keystroke_data END,
+                scroll_events = CASE
+                    WHEN VALUES(scroll_events) IS NOT NULL THEN
+                        JSON_MERGE_PRESERVE(
+                            COALESCE(scroll_events, JSON_ARRAY()),
+                            VALUES(scroll_events)
+                        )
+                    ELSE scroll_events END,
                 form_completion_time = VALUES(form_completion_time),
                 browser_info = VALUES(browser_info),
                 session_metadata = VALUES(session_metadata)

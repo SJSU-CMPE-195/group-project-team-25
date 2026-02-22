@@ -8,20 +8,35 @@ const FLUSH_INTERVAL_MS = 5000 // 5 seconds
 
 let sessionId = null
 let currentPage = null
+let trackingEnabled = true // false on /dev page
 
 let mouseBuffer = []
 let clickBuffer = []
 let keystrokeBuffer = []
+let scrollBuffer = []
 
 let lastMouseEvent = null
 let lastFlushTime = Date.now()
 let lastClickTimestamp = null
 let lastKeyTimestampByField = {}
+let lastScrollTimestamp = null
 
 let mouseIntervalId = null
 let isInitialized = false
 
-function getSessionId() {
+// Non-sensitive special keys worth logging for behavioral analysis.
+// Letters, digits, and modifiers (Shift, Ctrl, Alt, Meta) are excluded.
+const LOGGABLE_KEYS = new Set([
+  'Backspace', 'Delete', 'Tab', 'Enter', 'Escape',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'Home', 'End', 'PageUp', 'PageDown',
+  'Insert', 'CapsLock', 'NumLock', 'ScrollLock',
+  'ContextMenu', 'PrintScreen', 'Pause',
+  'F1', 'F2', 'F3', 'F4', 'F5', 'F6',
+  'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
+])
+
+export function getSessionId() {
   if (sessionId) return sessionId
 
   // Try to reuse from storage if available
@@ -33,14 +48,19 @@ function getSessionId() {
 
   sessionId = uuidv4()
   window.sessionStorage.setItem('tm_session_id', sessionId)
+  // Also store in localStorage so the /dev dashboard in another tab can find it
+  window.localStorage.setItem('tm_active_session_id', sessionId)
   return sessionId
 }
 
 export function setTrackingPage(pageName) {
   currentPage = pageName
+  // null means tracking is disabled (e.g. on /dev dashboard)
+  trackingEnabled = pageName !== null
 }
 
 function handleRawMouseMove(event) {
+  if (!trackingEnabled) return
   lastMouseEvent = {
     x: event.clientX,
     y: event.clientY
@@ -48,7 +68,7 @@ function handleRawMouseMove(event) {
 }
 
 function sampleMousePosition() {
-  if (!lastMouseEvent) return
+  if (!lastMouseEvent || !trackingEnabled) return
 
   const timestamp = performance.now()
 
@@ -60,6 +80,8 @@ function sampleMousePosition() {
 }
 
 function handleClick(event) {
+  if (!trackingEnabled) return
+
   const now = performance.now()
 
   const timeSinceLastClick = lastClickTimestamp != null ? now - lastClickTimestamp : null
@@ -92,6 +114,22 @@ function handleClick(event) {
   })
 }
 
+function handleScroll() {
+  if (!trackingEnabled) return
+
+  const now = performance.now()
+  const timeSinceLastScroll = lastScrollTimestamp != null ? now - lastScrollTimestamp : null
+  lastScrollTimestamp = now
+
+  scrollBuffer.push({
+    t: now,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+    dy: 0, // will be computed from consecutive samples
+    dt_since_last: timeSinceLastScroll
+  })
+}
+
 async function flushBuffers() {
   const now = Date.now()
   const elapsed = now - lastFlushTime
@@ -102,7 +140,7 @@ async function flushBuffers() {
 
   lastFlushTime = now
 
-  if ((!mouseBuffer.length && !clickBuffer.length && !keystrokeBuffer.length) || !sessionId) {
+  if ((!mouseBuffer.length && !clickBuffer.length && !keystrokeBuffer.length && !scrollBuffer.length) || !sessionId) {
     return
   }
 
@@ -132,9 +170,17 @@ async function flushBuffers() {
       }
     : null
 
+  const scrollPayload = scrollBuffer.length
+    ? {
+        ...payloadBase,
+        scrolls: scrollBuffer
+      }
+    : null
+
   mouseBuffer = []
   clickBuffer = []
   keystrokeBuffer = []
+  scrollBuffer = []
 
   try {
     const requests = []
@@ -169,6 +215,16 @@ async function flushBuffers() {
       )
     }
 
+    if (scrollPayload) {
+      requests.push(
+        fetch(`${API_BASE_URL}/api/tracking/scroll`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(scrollPayload)
+        })
+      )
+    }
+
     if (requests.length) {
       await Promise.allSettled(requests)
     }
@@ -179,18 +235,22 @@ async function flushBuffers() {
 
 export function initTracking() {
   if (isInitialized || typeof window === 'undefined') return
+  // Never initialize tracking on the dev dashboard — it would create
+  // a new session ID and overwrite localStorage, hiding the real session.
+  if (window.location.pathname.startsWith('/dev')) return
   isInitialized = true
 
   getSessionId()
 
   window.addEventListener('mousemove', handleRawMouseMove, { passive: true })
   window.addEventListener('click', handleClick, { passive: true })
+  window.addEventListener('scroll', handleScroll, { passive: true })
 
-  // Keystroke tracking – only for form fields on checkout page
+  // Keystroke tracking — captures form field typing on any page
   window.addEventListener(
     'keydown',
     (event) => {
-      if (currentPage !== 'checkout') return
+      if (!trackingEnabled) return
       const target = event.target
       if (!target) return
       const tag = target.tagName
@@ -204,12 +264,15 @@ export function initTracking() {
       const dt = last != null ? now - last : null
       lastKeyTimestampByField[fieldId] = now
 
-      // Privacy: we never store actual key values
+      // Log non-sensitive special key names; letters/digits/modifiers stay null
+      const key = LOGGABLE_KEYS.has(event.key) ? event.key : null
+
       keystrokeBuffer.push({
         field: fieldId,
         type: 'down',
         t: now,
-        dt_since_last: dt
+        dt_since_last: dt,
+        key: key
       })
     },
     false
@@ -218,7 +281,7 @@ export function initTracking() {
   window.addEventListener(
     'keyup',
     (event) => {
-      if (currentPage !== 'checkout') return
+      if (!trackingEnabled) return
       const target = event.target
       if (!target) return
       const tag = target.tagName
@@ -228,11 +291,13 @@ export function initTracking() {
 
       const now = performance.now()
       const fieldId = target.name || target.id || 'unknown'
+      const key = LOGGABLE_KEYS.has(event.key) ? event.key : null
 
       keystrokeBuffer.push({
         field: fieldId,
         type: 'up',
-        t: now
+        t: now,
+        key: key
       })
     },
     false
@@ -244,3 +309,11 @@ export function initTracking() {
   window.setInterval(flushBuffers, 1000)
 }
 
+/**
+ * Force-flush all buffered telemetry immediately.
+ * Call before agent evaluation to ensure DB has latest data.
+ */
+export async function forceFlush() {
+  lastFlushTime = 0
+  await flushBuffers()
+}

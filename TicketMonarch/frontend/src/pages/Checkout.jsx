@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Checkout.css'
-import { submitCheckout } from '../services/api'
+import { submitCheckout, evaluateSession } from '../services/api'
+import { forceFlush, getSessionId } from '../services/tracking'
+import ChallengeModal from '../components/ChallengeModal'
 
 const US_STATES = [
   'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
@@ -32,6 +34,8 @@ function Checkout() {
   })
 
   const [submitMessage, setSubmitMessage] = useState('')
+  const [isEvaluating, setIsEvaluating] = useState(false)
+  const [challengeState, setChallengeState] = useState(null) // { type: 'blocked' | 'puzzle', difficulty }
 
   useEffect(() => {
     // Get booking selection from localStorage
@@ -52,6 +56,27 @@ function Checkout() {
     }))
   }
 
+  const proceedWithCheckout = async () => {
+    try {
+      const result = await submitCheckout(formData)
+
+      if (result.success) {
+        const orderDetails = {
+          ...bookingSelection,
+          customerInfo: formData,
+          orderDate: new Date().toISOString()
+        }
+        localStorage.setItem('orderDetails', JSON.stringify(orderDetails))
+        localStorage.removeItem('bookingSelection')
+        navigate('/confirmation')
+      } else {
+        setSubmitMessage('Error')
+      }
+    } catch (error) {
+      setSubmitMessage('Error')
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -60,26 +85,49 @@ function Checkout() {
       return
     }
 
-    try {
-      const result = await submitCheckout(formData)
+    setIsEvaluating(true)
+    setSubmitMessage('')
 
-      if (result.success) {
-        // Store order details for confirmation page
-        const orderDetails = {
-          ...bookingSelection,
-          customerInfo: formData,
-          orderDate: new Date().toISOString()
-        }
-        localStorage.setItem('orderDetails', JSON.stringify(orderDetails))
-        localStorage.removeItem('bookingSelection')
-        
-        // Navigate to confirmation page
-        navigate('/confirmation')
+    try {
+      // Flush all pending telemetry so the agent sees everything
+      await forceFlush()
+      // Small delay to let the backend persist the flush
+      await new Promise(r => setTimeout(r, 300))
+
+      const sessionId = getSessionId()
+      const agentResult = await evaluateSession(sessionId)
+
+      setIsEvaluating(false)
+
+      const decision = agentResult.decision || 'allow'
+      console.log(`[RL Agent] session=${sessionId} decision=${decision} confidence=${agentResult.confidence} events=${agentResult.events_processed}`)
+
+      if (decision === 'allow') {
+        await proceedWithCheckout()
+      } else if (decision === 'block') {
+        // Hard block — still give a hard puzzle so humans can pass
+        setChallengeState({ type: 'puzzle', difficulty: 'hard' })
+      } else if (decision.includes('puzzle')) {
+        // easy_puzzle, medium_puzzle, hard_puzzle
+        const difficulty = decision.replace('_puzzle', '') || 'medium'
+        setChallengeState({ type: 'puzzle', difficulty })
       } else {
-        setSubmitMessage('Error')
+        // Unknown decision — fail open
+        await proceedWithCheckout()
       }
     } catch (error) {
-      setSubmitMessage('Error')
+      setIsEvaluating(false)
+      // Fail open on error
+      await proceedWithCheckout()
+    }
+  }
+
+  const handleChallengeComplete = async (passed) => {
+    setChallengeState(null)
+    if (passed) {
+      await proceedWithCheckout()
+    } else {
+      setSubmitMessage('Verification failed. Please try again.')
     }
   }
 
@@ -321,6 +369,20 @@ function Checkout() {
           </div>
         </div>
       </div>
+
+      {isEvaluating && (
+        <div className="evaluating-overlay">
+          <div className="evaluating-message">Verifying your session...</div>
+        </div>
+      )}
+
+      {challengeState && (
+        <ChallengeModal
+          type={challengeState.type}
+          difficulty={challengeState.difficulty}
+          onComplete={handleChallengeComplete}
+        />
+      )}
     </div>
   )
 }

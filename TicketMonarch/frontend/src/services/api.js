@@ -4,7 +4,7 @@ const API_BASE_URL = '/api'
 
 export const submitCheckout = async (checkoutData) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/checkout`, {
+    const response = await fetch(`${API_BASE_URL}/checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -79,6 +79,47 @@ export const healthCheck = async () => {
       success: false,
       error: 'Unable to connect to the server'
     }
+  }
+}
+
+export const evaluateSession = async (sessionId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/agent/evaluate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId }),
+    })
+    return await response.json()
+  } catch (error) {
+    console.error('Agent evaluation error:', error)
+    return { success: true, decision: 'allow', action_index: 5, reason: 'agent_unreachable' }
+  }
+}
+
+export const fetchDashboardData = async (sessionId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/agent/dashboard/${sessionId}`)
+    return await response.json()
+  } catch (error) {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export const fetchRecentSessions = async (limit = 20) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/agent/sessions?limit=${limit}`)
+    return await response.json()
+  } catch (error) {
+    return { success: false, sessions: [] }
+  }
+}
+
+export const fetchLiveTelemetry = async (sessionId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/agent/live/${sessionId}`)
+    return await response.json()
+  } catch (error) {
+    return { success: false }
   }
 }
 
