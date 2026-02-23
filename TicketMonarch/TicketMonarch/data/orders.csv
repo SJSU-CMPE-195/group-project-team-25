@@ -1,0 +1,4 @@
+customer_name,email,product_name,quantity,price,total,order_date
+John Doe,john.doe@example.com,Concert Ticket VIP,2,150.00,300.00,2024-01-15T10:30:00
+Jane Smith,jane.smith@example.com,Theater Show Standard,1,75.00,75.00,2024-01-16T14:20:00
+
