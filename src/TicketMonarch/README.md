@@ -1,1 +1,691 @@
-# RLCAPTCHA
+# Ticket Monarch
+
+Developed by Team 25 — San Jose State University
+
+A mock concert ticket-booking web app that uses a PPO+LSTM reinforcement learning agent to detect bots in real time based on raw telemetry (mouse movements, clicks, keystrokes, scrolls).
+
+## Prerequisites
+
+| Tool | Version |
+|------|---------|
+| Python | 3.12+ |
+| Node.js | 18+ |
+| MySQL | 8.0+ |
+
+## Project Structure
+
+```
+TicketMonarch/
+├── TicketMonarch/          # Main web application
+│   ├── backend/            # Flask API + agent inference
+│   ├── frontend/           # React + Vite SPA
+│   └── .env.example        # MySQL connection config template
+├── rl_captcha/             # PPO+LSTM agent (training & evaluation)
+├── bots/                   # Selenium & LLM bots for data collection
+├── chrome-extension/       # Telemetry capture extension
+└── data/                   # Training data (human/ and bot/)
+```
+
+## Quick Start (Full Setup)
+
+All commands assume you are in the `src/TicketMonarch/` directory.
+
+### 1. Create and activate a virtual environment
+
+**PowerShell (Windows):**
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
+**macOS / Linux:**
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+### 2. Install all Python dependencies
+
+```bash
+pip install -r TicketMonarch/backend/requirements.txt
+pip install -r rl_captcha/requirements.txt
+pip install -r bots/requirements.txt
+```
+
+If you plan to use the LLM bot, also run:
+```bash
+pip install langchain-anthropic
+playwright install chromium
+```
+
+### 3. Configure the database
+
+```bash
+cp TicketMonarch/.env.example TicketMonarch/.env
+```
+
+Edit `TicketMonarch/.env` and set your MySQL password:
+```
+MYSQL_HOST=localhost
+MYSQL_DATABASE=ticketmonarch_db
+MYSQL_USER=root
+MYSQL_PASSWORD=<your_password>
+MYSQL_PORT=3306
+```
+
+Then create the database and tables:
+```bash
+python TicketMonarch/backend/setup_mysql.py
+```
+
+### 4. Install frontend dependencies
+
+```bash
+cd TicketMonarch/frontend
+npm install
+cd ../..
+```
+
+### 5. Run the application
+
+Open **two terminals** (activate the venv in each if running Python):
+
+```bash
+# Terminal 1 — Backend (http://localhost:5000)
+python TicketMonarch/backend/app.py
+
+# Terminal 2 — Frontend (http://localhost:3000)
+cd TicketMonarch/frontend
+npm run dev
+```
+
+Open **http://localhost:3000** in your browser. Vite proxies `/api/*` requests to Flask automatically.
+
+## User Flow
+
+1. **Home** (`/`) — Browse concerts and select one
+2. **Seat Selection** (`/seats/:id`) — Pick seats from an interactive layout
+3. **Checkout** (`/checkout`) — Fill the payment form
+   - Rolling inference polls every 3 seconds; deploys a honeypot if suspicious
+   - On "Purchase": telemetry is force-flushed and the agent evaluates the full session
+   - Honeypot triggered → instant hard puzzle
+   - High bot probability → scaled puzzle (easy/medium/hard based on confidence)
+   - Low suspicion → checkout proceeds
+4. **Confirmation** (`/confirmation`) — Order confirmed, session sent for online RL update
+
+## Dev Dashboard
+
+Open **http://localhost:3000/dev** in a separate tab.
+
+- **Live Monitor:** Auto-detects the active session, polls every 1 second showing real-time event counts and rolling bot probability.
+- **Analyze Session:** Full agent analysis on any session — decision banner, action probability bars, per-event timeline, LSTM hidden-state heatmap.
+
+## Chrome Extension (Telemetry Collector)
+
+The Chrome extension captures raw user-interaction telemetry (mouse, clicks, keystrokes, scrolls) for training data collection. Both human sessions and bot sessions use this extension.
+
+### Loading the Extension
+
+1. Open `chrome://extensions/` (or `edge://extensions/` on Edge)
+2. Enable **Developer mode** (top-right toggle)
+3. Click **Load unpacked**
+4. Select the `chrome-extension/` folder from this repo
+5. The **TicketMonarch Telemetry Collector** icon appears in your toolbar
+
+### Using the Extension
+
+1. Click the extension icon to open the popup
+2. Click **Start Recording** — the status dot turns green and pulses
+3. Browse the site normally (all tabs are captured)
+4. The popup shows live counts: mouse samples, clicks, keystrokes, scroll events
+5. Click **Stop Recording** when done
+6. Click **Export JSON** to download a `telemetry_export_<timestamp>.json` file
+7. Save the file to `data/human/` (for human data) or `data/bot/` (for bot data)
+
+### What Gets Captured
+
+| Signal | Sample Rate | Data Captured |
+|--------|-------------|---------------|
+| Mouse movement | ~66 Hz (15 ms) | Client X/Y, page X/Y, timestamp |
+| Clicks | Every click | Position, button, target element info, time delta |
+| Keystrokes | Every key | Field ID, down/up, timestamp, special keys only (NO characters/passwords) |
+| Scroll | ~20 Hz (50 ms) | X/Y position, delta, timestamp |
+| Client hints | Once per page | Screen size, timezone, language, device memory, user agent |
+| Network meta | Once per page | Connection type, bandwidth, RTT, page load timings |
+
+Data is segmented around 3+ second idle gaps for temporal coherence.
+
+---
+
+## Running the Bots
+
+Bots drive a real Chrome browser through the full booking flow to generate labeled training data. The frontend's built-in `tracking.js` captures all telemetry automatically, so the bots just need to interact with the site.
+
+### Prerequisites
+
+Before running any bot, make sure:
+
+1. **TicketMonarch is running** — backend (`python app.py`) + frontend (`npm run dev`)
+2. **The venv is activated** with bot dependencies installed (see [Quick Start](#quick-start-full-setup))
+3. **Chrome is installed** on your machine
+
+### Bot Dependencies (already installed if you followed Quick Start)
+
+```bash
+# Core bot packages
+pip install -r bots/requirements.txt
+
+# Additional packages for the LLM bot
+pip install langchain-anthropic
+playwright install chromium
+```
+
+---
+
+### Selenium Bot
+
+Three behavior profiles that produce progressively harder-to-detect bot data:
+
+| Profile | Mouse Movement | Typing | Scrolling | Detection Difficulty |
+|---------|---------------|--------|-----------|---------------------|
+| `linear` | Straight-line, instant jumps | Uniform 20 ms intervals | None | Easy |
+| `scripted` | Bezier curves with micro-jitter | Variable timing, burst typing, thinking pauses | Momentum-based random scrolls | Medium |
+| `replay` | Replays recorded human mouse data + Gaussian noise | Uniform-ish | Replayed from source with variance | Hard |
+
+#### Commands
+
+```bash
+# Linear bot — robotic straight-line movement, uniform typing
+python bots/selenium_bot.py --runs 5 --type linear
+
+# Scripted bot — Bezier curves, varied timing, scrolling
+python bots/selenium_bot.py --runs 5 --type scripted
+
+# Replay bot — replays real human mouse patterns with noise
+python bots/selenium_bot.py --runs 3 --type replay \
+    --replay-source data/human/telemetry_export_example.json
+```
+
+#### All Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--runs` | `3` | Number of bot sessions to run |
+| `--type` | `linear` | Bot behavior profile: `linear`, `scripted`, or `replay` |
+| `--replay-source` | — | Path to a human telemetry JSON file (required for `replay` type) |
+| `--pause-between` | `2.0` | Seconds to wait between runs |
+
+#### How It Works (Step-by-Step)
+
+1. Opens Chrome with the telemetry Chrome extension loaded
+2. Prompts you to **click "Start Recording"** in the extension popup
+3. Navigates through the full booking flow for each run:
+   - **Home** → picks a random concert
+   - **Seat Selection** → picks a random section, clicks Continue
+   - **Checkout** → fills all form fields with fake identity data (8 built-in personas)
+   - **Purchase** → submits the order
+   - **Challenge handling** → if a CAPTCHA challenge appears, the bot attempts to interact (slider, canvas text, timed click — up to 3 retries)
+4. After each run, the bot pulls telemetry from the backend API, saves it to `data/bot/`, and confirms the session as a bot (`true_label=0`) to trigger an online RL update
+5. After all runs complete, prompts you to **click "Export JSON"** in the extension popup for the raw extension data
+
+#### Behavior Details
+
+**Mouse movement (scripted profile):**
+- Bezier curves with 10–25 steps per movement
+- Ease-in-out timing (slower at start/end, faster in middle)
+- Micro-jitter: Gaussian noise of ~1.5 px (x-axis) and ~1.0 px (y-axis)
+
+**Typing (scripted profile):**
+- Burst typing: 2–3 chars quickly (30% probability)
+- Variable inter-key delays: lognormal distribution, 0.03–0.25 s
+- Thinking pauses: 0.3–0.8 s (8% probability)
+- 0.1–0.3 s delay before starting to type each field
+
+**Scrolling (scripted profile):**
+- Momentum-based: 3–8 steps per gesture with decreasing scroll amounts
+- Pauses between gestures: 0.5–1.5 s
+
+**Replay mode:**
+- Replays mouse coordinates from a recorded JSON file
+- Adds Gaussian noise: ~6 px (x-axis), ~4 px (y-axis)
+- Timing jitter applied to deltas
+- 10% chance of micro-corrections per point
+- Scroll events replayed with 0.8–1.2x variance
+
+---
+
+### LLM Bot
+
+Uses [browser-use](https://github.com/browser-use/browser-use) to give an LLM (Claude or GPT-4o) full autonomous control of a Chrome browser. The LLM reads the page, decides where to click, what to type, and completes the booking flow on its own — producing the most realistic bot behavior.
+
+#### Environment Variables
+
+Set your API key before running:
+
+**PowerShell:**
+```powershell
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+# or for OpenAI:
+$env:OPENAI_API_KEY = "sk-..."
+```
+
+**macOS / Linux:**
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+# or for OpenAI:
+export OPENAI_API_KEY=sk-...
+```
+
+#### Commands
+
+```bash
+# Run with Claude (default)
+python bots/llm_bot.py --runs 3 --provider anthropic
+
+# Run with GPT-4o
+python bots/llm_bot.py --runs 3 --provider openai
+
+# Custom task prompt
+python bots/llm_bot.py --task "Go to localhost:3000, browse concerts, pick the cheapest tickets"
+
+# Enable DOM event injection (alternates injection on/off per run for data diversity)
+python bots/llm_bot.py --runs 4 --inject-events
+```
+
+#### All Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--runs` | `1` | Number of bot sessions to run |
+| `--provider` | `anthropic` | LLM provider: `anthropic` or `openai` |
+| `--pause-between` | `3.0` | Seconds to wait between runs |
+| `--task` | *(full booking flow)* | Custom instruction prompt for the LLM |
+| `--inject-events` | off | Enable DOM event injection script (alternates on/off per run) |
+
+#### How It Works (Step-by-Step)
+
+1. Opens a visible Chrome window (not headless) with `disable_security=True`
+2. Optionally injects a DOM event-generation script via CDP that patches `element.click()`, `element.focus()`, `scrollTo/scrollBy`, and input events into real browser events — so `tracking.js` captures full telemetry even from programmatic actions
+3. The LLM autonomously navigates: browses concerts → selects seats → fills checkout → purchases
+4. After each run, the script waits 8 seconds for `tracking.js` to flush, then:
+   - Reads `tm_session_id` from the browser's sessionStorage via CDP
+   - Falls back to diffing recent session IDs from the backend API
+   - Pulls raw telemetry from `/api/session/raw/<sid>`
+   - Saves the JSON to `data/bot/` with a UTC timestamp filename
+   - Confirms the session as a bot (`true_label=0`) via `/api/agent/confirm`
+5. When `--inject-events` is enabled, even-numbered runs get injection and odd runs don't, creating data diversity (sparse vs. rich telemetry)
+
+#### LLM Models Used
+
+| Provider | Model |
+|----------|-------|
+| Anthropic | `claude-sonnet-4-20250514` |
+| OpenAI | `gpt-4o` |
+
+---
+
+### Telemetry Data Flow (All Bots)
+
+```
+Bot interacts with site
+        │
+        ▼
+tracking.js captures events in browser ──► Backend stores in MySQL
+        │                                        │
+        ▼                                        ▼
+Chrome extension records                Bot pulls from /api/session/raw/<sid>
+(optional, for raw export)              and saves JSON to data/bot/
+                                                 │
+                                                 ▼
+                                        Bot calls /api/agent/confirm
+                                        with true_label=0 (bot)
+                                                 │
+                                                 ▼
+                                        Online RL PPO update triggered
+```
+
+### Output Files
+
+Bot telemetry is saved to `data/bot/` as JSON files:
+- Selenium bot: `session_<session_id>.json`
+- LLM bot: `llm_bot_<utc_timestamp>.json`
+
+Each file contains the raw telemetry arrays (mouse movements, clicks, keystrokes, scroll events) pulled from the backend.
+
+---
+
+## Training the RL Agent
+
+Training data lives in `data/human/` (label=1) and `data/bot/` (label=0).
+
+### 1. Collect Data
+
+**Human data:** Use the Chrome extension to record real browsing sessions. Export JSON and save to `data/human/`.
+
+**Bot data:** Run the bots (see above). They automatically save to `data/bot/` and confirm sessions as bots.
+
+### 2. Train
+
+```bash
+python -m rl_captcha.scripts.train_ppo \
+    --data-dir data/ \
+    --total-timesteps 500000
+```
+
+Checkpoint saved to `rl_captcha/agent/checkpoints/ppo_run1/`.
+
+### 3. Evaluate
+
+```bash
+python -m rl_captcha.scripts.evaluate_ppo \
+    --agent rl_captcha/agent/checkpoints/ppo_run1 \
+    --data-dir data/
+```
+
+Outputs confusion matrix, F1 score, and action distribution breakdown.
+
+#### Training CLI Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--data-dir` | `data/` | Root directory containing `human/` and `bot/` subdirectories |
+| `--save-path` | `rl_captcha/agent/checkpoints/ppo_run1` | Where to save model checkpoints |
+| `--total-timesteps` | `500000` | Total environment steps to train for |
+| `--log-interval` | `1` | Print stats every N rollouts |
+| `--save-interval` | `10` | Save checkpoint every N rollouts |
+| `--device` | `auto` | Compute device: `auto`, `cuda`, or `cpu` |
+
+#### Evaluation CLI Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--agent` | *(required)* | Path to checkpoint directory |
+| `--data-dir` | `data/` | Root data directory |
+| `--episodes` | `500` | Number of episodes to evaluate |
+| `--device` | `auto` | Compute device: `auto`, `cuda`, or `cpu` |
+
+---
+
+## RL System Design: Policy, Actions, and Reward Function
+
+This section documents the complete reinforcement learning system that powers bot detection. The agent is a PPO+LSTM model that processes raw telemetry events one-by-one and decides in real time whether a user is a human or a bot.
+
+### High-Level Architecture
+
+```
+Raw telemetry events (mouse, click, keystroke, scroll)
+        │
+        ▼
+Event Encoder (13-dimensional vector per event)
+        │
+        ▼
+LSTM (128 hidden units) ── accumulates temporal evidence
+        │
+        ├──► Actor head (128 → 64 → 7 logits) ──► action (policy)
+        └──► Critic head (128 → 64 → 1 value)  ──► V(s) (value estimate)
+```
+
+The LSTM processes events sequentially. At every timestep (event), the agent chooses one of 7 actions. Most of the time it chooses `continue` (keep watching). When it has seen enough evidence, it makes a terminal decision: allow, block, or deploy a puzzle challenge.
+
+---
+
+### State Representation (Observation Space)
+
+Each raw telemetry event is encoded into a **13-dimensional float vector**:
+
+| Dimensions | Content | Encoding |
+|-----------|---------|----------|
+| 0–4 | Event type | One-hot: `[mouse, click, key_down, key_up, scroll]` |
+| 5 | X coordinate | Normalized by screen width: `x / 1920.0` |
+| 6 | Y coordinate | Normalized by screen height: `y / 1080.0` |
+| 7 | Time since last event | Log-normalized: `log1p(min(dt, 5000)) / log1p(5000)` |
+| 8 | Mouse speed | Computed incrementally between consecutive mouse events, normalized by 5000 px/s |
+| 9 | Scroll delta Y | Clipped to `[-1.0, 1.0]` after dividing by 500 px |
+| 10 | Special key flag | `1.0` if the keystroke event has a named key (Backspace, Enter, Arrow, etc.) |
+| 11 | Left-click flag | `1.0` if click button is `"left"` |
+| 12 | Interactive target flag | `1.0` if click target tag is `INPUT`, `BUTTON`, `A`, `SELECT`, or `TEXTAREA` |
+
+**Preprocessing before encoding:**
+- Mouse events are subsampled: every 5th event is kept (66 Hz → ~13 Hz)
+- All event types are merged into a single timeline and sorted by timestamp
+- Episodes are capped at 500 events maximum
+- Sessions with fewer than 10 events are skipped
+
+---
+
+### Action Space (Policy)
+
+The agent chooses from **7 discrete actions** at every timestep:
+
+| Index | Action | Terminal? | Description | UX Cost |
+|-------|--------|-----------|-------------|---------|
+| 0 | `continue` | No | Keep observing, wait for more events | 0.0 |
+| 1 | `deploy_honeypot` | No | Place invisible trap fields on the page | 0.01 |
+| 2 | `easy_puzzle` | Yes | Show an easy CAPTCHA challenge | 0.1 |
+| 3 | `medium_puzzle` | Yes | Show a medium CAPTCHA challenge | 0.3 |
+| 4 | `hard_puzzle` | Yes | Show a hard CAPTCHA challenge | 0.5 |
+| 5 | `allow` | Yes | Let the user through without challenge | 0.0 |
+| 6 | `block` | Yes | Block the user entirely | 0.0 |
+
+**Terminal actions** end the episode immediately. The agent receives a final reward based on whether its decision was correct.
+
+**Non-terminal actions** let the episode continue to the next event. The agent can observe more behavior before committing to a decision.
+
+**Honeypot mechanics:**
+- Maximum 2 honeypots can be deployed per session
+- Bots have a 60% chance of triggering a honeypot
+- Humans have only a 1% chance of triggering (accidental interaction)
+- If triggered by a bot, the agent receives a +0.3 information bonus
+- Additional honeypots beyond the limit are silently ignored
+
+---
+
+### Reward Function
+
+The reward structure is designed to balance two competing objectives: **catching bots** (security) and **not annoying humans** (user experience).
+
+#### Terminal Rewards
+
+| Scenario | Action | True Label | Reward | Rationale |
+|----------|--------|------------|--------|-----------|
+| Correctly allow human | `allow` | Human (1) | **+0.5** | Good, but lower than catching a bot — incentivizes discrimination over passivity |
+| Correctly block bot | `block` | Bot (0) | **+1.0** | Highest reward — correctly identifying a bot is the primary goal |
+| False positive (block human) | `block` | Human (1) | **-1.0** | Harshest penalty — blocking a real user is the worst outcome for UX |
+| False negative (allow bot) | `allow` | Bot (0) | **-0.8** | Strong penalty — letting a bot through defeats the system's purpose |
+
+#### Puzzle Rewards (Probabilistic Outcomes)
+
+Puzzles are not deterministic — they have pass rates that depend on difficulty:
+
+| Difficulty | Human Pass Rate | Bot Pass Rate |
+|------------|----------------|---------------|
+| Easy | 95% | 40% |
+| Medium | 85% | 15% |
+| Hard | 70% | 5% |
+
+The reward for deploying a puzzle depends on the outcome:
+
+- **Puzzle shown to a human:**
+  - Reward = `penalty_false_positive × (1.0 - human_pass_rate)` minus the action cost
+  - Easy puzzle on human: `-1.0 × 0.05 - 0.1 = -0.15` (mild penalty, most humans pass)
+  - Hard puzzle on human: `-1.0 × 0.30 - 0.5 = -0.80` (steep penalty, many humans fail)
+
+- **Puzzle shown to a bot:**
+  - If bot passes (probabilistic): `penalty_false_negative × 0.5` (partial penalty)
+  - If bot fails: `reward_correct_block = +1.0` (full reward for catching the bot)
+
+This means harder puzzles are more effective at catching bots but risk more false-positive damage — the agent must learn when the evidence justifies the risk.
+
+#### Non-Terminal Rewards
+
+| Event | Reward | Purpose |
+|-------|--------|---------|
+| `continue` (each event) | **-0.001** | Tiny time pressure — discourages the agent from watching forever without deciding |
+| `deploy_honeypot` | **-0.01** cost | Minimal UX friction for placing invisible traps |
+| Honeypot triggered by bot | **+0.3** bonus | Rewards gathering information, deferred to next step |
+| Episode truncated (hit 500 events without deciding) | **-0.5** | Penalizes indecision — the agent must commit before the session ends |
+
+#### Reward Design Philosophy
+
+- **Asymmetric penalties:** Blocking a human (-1.0) is penalized more harshly than allowing a bot (-0.8), reflecting that user experience damage is harder to recover from than a single bot slipping through
+- **Graduated difficulty:** The agent can choose proportional responses — a slightly suspicious session gets an easy puzzle, not a full block
+- **Information gathering:** Honeypots provide a low-cost way to gather evidence before committing to a terminal action
+- **Time pressure:** The continue penalty prevents the agent from stalling, but at -0.001 per event it is gentle enough to allow thorough observation when needed
+
+---
+
+### Network Architecture
+
+```
+Input: (batch, seq_len, 13)
+              │
+              ▼
+     ┌─────────────────┐
+     │  LSTM Layer      │
+     │  input:  13      │
+     │  hidden: 128     │
+     │  layers: 1       │
+     │  batch_first     │
+     └────────┬────────┘
+              │ (batch, seq_len, 128)
+              │
+       ┌──────┴──────┐
+       ▼              ▼
+┌─────────────┐ ┌─────────────┐
+│ Actor Head  │ │ Critic Head │
+│ Linear(128→64)│ │ Linear(128→64)│
+│ Tanh        │ │ Tanh        │
+│ Linear(64→7)│ │ Linear(64→1)│
+└─────────────┘ └─────────────┘
+       │              │
+       ▼              ▼
+  action logits   value V(s)
+    (7-dim)        (scalar)
+```
+
+- **~100K total parameters** — intentionally small for fast CPU inference
+- **LSTM hidden state** carries temporal context across the entire session
+- The actor outputs a probability distribution over 7 actions (softmax of logits)
+- The critic estimates the expected future reward from the current state
+
+---
+
+### PPO Training Algorithm
+
+| Hyperparameter | Value | Description |
+|----------------|-------|-------------|
+| Learning rate | 3×10⁻⁴ | Adam optimizer step size |
+| Discount (γ) | 0.99 | How much future rewards are valued vs. immediate |
+| GAE lambda (λ) | 0.95 | Bias-variance tradeoff for advantage estimation |
+| PPO clip (ε) | 0.2 | Limits how far the new policy can deviate from the old |
+| Value loss coefficient | 0.5 | Weight of critic loss in total loss |
+| Entropy coefficient | 0.01 | Encourages exploration by penalizing overly confident policies |
+| Max gradient norm | 0.5 | Gradient clipping for training stability |
+| Rollout buffer size | 2048 | Steps collected before each PPO update |
+| PPO epochs | 4 | Number of passes over the buffer per update |
+| Total timesteps | 500,000 | Total training steps |
+
+**Training loop:**
+
+1. **Collect rollout:** Run the agent in the environment for 2048 steps, storing observations, actions, rewards, log-probs, and values. Episodes are sampled 50/50 between human and bot sessions.
+2. **Compute advantages:** Use Generalized Advantage Estimation (GAE) to compute per-step advantages and returns. Bootstrap the final value if the episode is not done.
+3. **PPO update:** For 4 epochs over the collected buffer:
+   - Replay each episode segment through the LSTM from its initial hidden state (preserving temporal continuity)
+   - Normalize advantages within each segment
+   - Compute the PPO clipped surrogate loss: `L = -min(ratio × A, clip(ratio, 1-ε, 1+ε) × A)`
+   - Compute value loss: `MSE(predicted_value, return)`
+   - Compute total loss: `policy_loss + 0.5 × value_loss - 0.01 × entropy`
+   - Clip gradients to max norm 0.5 and step the Adam optimizer
+4. **Repeat** until 500,000 total steps are reached
+
+**Note:** Episodes are processed sequentially (not shuffled as minibatches) to preserve LSTM hidden-state continuity across timesteps within each episode.
+
+---
+
+### Live Inference (Production)
+
+The trained agent is loaded by `agent_service.py` in the Flask backend. Three inference modes are used in production:
+
+#### 1. Full Session Evaluation (`evaluate_session`)
+
+Called when the user clicks "Purchase" at checkout.
+
+1. Encodes all telemetry events into the 13-dim representation
+2. Runs the entire sequence through the LSTM in a single batched forward pass
+3. Takes the **last 10% of events** (minimum 5) and averages their action probabilities — this gives the LSTM's most informed assessment after processing all evidence
+4. Applies a confidence threshold:
+   - If `p_suspicious > 0.45` (sum of puzzle + block probabilities):
+     - `p_block > 0.4` or `p_hard_puzzle > 0.25` → hard puzzle
+     - Otherwise → medium or easy puzzle based on which has higher probability
+   - Otherwise → allow
+
+#### 2. Rolling Evaluation (`rolling_evaluate`)
+
+Called every 3 seconds during the checkout flow for live monitoring.
+
+1. Processes all events collected so far
+2. Takes the **last 20% of events** (minimum 5)
+3. Applies **exponential weighting** — more recent events count more heavily
+4. Returns a `bot_probability` score and whether to `deploy_honeypot`
+5. Used by the frontend to show real-time suspicion levels on the Dev Dashboard
+
+#### 3. Online Learning (`online_learn`)
+
+Called after a session is confirmed as human or bot (e.g., after bot runs, or after the confirmation page).
+
+1. Replays all events through the agent, collecting actions and rewards
+2. Final event receives the true-label reward (correct/incorrect allow/block)
+3. Runs a **gentle PPO update**: 1 epoch only, learning rate reduced to 1/5th of training rate (6×10⁻⁵)
+4. Saves the updated checkpoint immediately
+5. This allows the model to continuously improve from real-world sessions
+
+---
+
+### Evaluation Metrics
+
+When running `evaluate_ppo.py`, the following metrics are reported:
+
+**Confusion matrix:**
+- **TP (True Positive):** Bot correctly blocked or caught by puzzle
+- **TN (True Negative):** Human correctly allowed through
+- **FP (False Positive):** Human incorrectly blocked or challenged
+- **FN (False Negative):** Bot incorrectly allowed through or passed puzzle
+
+**Derived metrics:**
+- **Accuracy** = (TP + TN) / total
+- **Precision** = TP / (TP + FP) — of all users flagged as bots, how many actually were?
+- **Recall** = TP / (TP + FN) — of all actual bots, how many were caught?
+- **F1 Score** = 2 × Precision × Recall / (Precision + Recall)
+
+**Additional outputs:**
+- Outcome distribution (percentage breakdown of all outcomes)
+- Final action distribution (which terminal actions the agent prefers)
+- Decision timing (average number of events processed before deciding, split by human vs. bot)
+
+## API Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/checkout` | Submit checkout form |
+| POST | `/api/tracking/mouse` | Batch mouse samples |
+| POST | `/api/tracking/clicks` | Batch click events |
+| POST | `/api/tracking/keystrokes` | Batch keystroke timing |
+| POST | `/api/tracking/scroll` | Batch scroll events |
+| POST | `/api/agent/rolling` | Rolling inference (bot prob + honeypot deploy) |
+| POST | `/api/agent/evaluate` | Full agent evaluation at checkout |
+| POST | `/api/agent/confirm` | Online learning update (human/bot label) |
+| GET | `/api/agent/dashboard/<sid>` | Full agent analysis + LSTM state |
+| GET | `/api/agent/live/<sid>` | Live telemetry counts |
+| GET | `/api/agent/sessions` | Recent sessions list |
+| GET | `/api/agent/session-ids` | All session IDs |
+| GET | `/api/session/raw/<sid>` | Raw session telemetry data |
+| GET | `/api/export/tracking` | Export telemetry to CSV |
+| GET | `/api/export` | Export checkout data to CSV |
+| GET | `/api/health` | Health check |
+
+## Tech Stack
+
+- **Frontend:** React 18.2, Vite 5, React Router DOM 6, vanilla CSS
+- **Backend:** Python 3.12, Flask 3.0, Flask-CORS, mysql-connector-python
+- **Agent:** PyTorch PPO+LSTM (lazy-loaded, thread-safe)
+- **Database:** MySQL 8.0+

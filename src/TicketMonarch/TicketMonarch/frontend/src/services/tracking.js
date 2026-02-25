@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 
-const API_BASE_URL = 'http://localhost:5000'
+const API_BASE_URL = '/api'
 
 // Target sampling rate ~50–100 Hz
 const MOUSE_SAMPLE_INTERVAL_MS = 15 // ~66 Hz
@@ -114,7 +114,7 @@ function handleClick(event) {
   })
 }
 
-function handleScroll() {
+function handleWheel(event) {
   if (!trackingEnabled) return
 
   const now = performance.now()
@@ -125,7 +125,7 @@ function handleScroll() {
     t: now,
     scrollX: window.scrollX,
     scrollY: window.scrollY,
-    dy: 0, // will be computed from consecutive samples
+    dy: event.deltaY,
     dt_since_last: timeSinceLastScroll
   })
 }
@@ -187,7 +187,7 @@ async function flushBuffers() {
 
     if (mousePayload) {
       requests.push(
-        fetch(`${API_BASE_URL}/api/tracking/mouse`, {
+        fetch(`${API_BASE_URL}/tracking/mouse`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(mousePayload)
@@ -197,7 +197,7 @@ async function flushBuffers() {
 
     if (clickPayload) {
       requests.push(
-        fetch(`${API_BASE_URL}/api/tracking/clicks`, {
+        fetch(`${API_BASE_URL}/tracking/clicks`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(clickPayload)
@@ -207,7 +207,7 @@ async function flushBuffers() {
 
     if (keystrokePayload) {
       requests.push(
-        fetch(`${API_BASE_URL}/api/tracking/keystrokes`, {
+        fetch(`${API_BASE_URL}/tracking/keystrokes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(keystrokePayload)
@@ -217,7 +217,7 @@ async function flushBuffers() {
 
     if (scrollPayload) {
       requests.push(
-        fetch(`${API_BASE_URL}/api/tracking/scroll`, {
+        fetch(`${API_BASE_URL}/tracking/scroll`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(scrollPayload)
@@ -244,7 +244,7 @@ export function initTracking() {
 
   window.addEventListener('mousemove', handleRawMouseMove, { passive: true })
   window.addEventListener('click', handleClick, { passive: true })
-  window.addEventListener('scroll', handleScroll, { passive: true })
+  window.addEventListener('wheel', handleWheel, { passive: true })
 
   // Keystroke tracking — captures form field typing on any page
   window.addEventListener(
@@ -317,3 +317,29 @@ export async function forceFlush() {
   lastFlushTime = 0
   await flushBuffers()
 }
+
+/**
+ * Reset the session — generates a new session ID and clears all buffers.
+ * Call after a successful purchase so the next flow starts fresh.
+ */
+export function resetSession() {
+  // Clear buffers
+  mouseBuffer = []
+  clickBuffer = []
+  keystrokeBuffer = []
+  scrollBuffer = []
+
+  // Reset timing state
+  lastMouseEvent = null
+  lastClickTimestamp = null
+  lastKeyTimestampByField = {}
+  lastScrollTimestamp = null
+
+  // Generate new session ID
+  sessionId = uuidv4()
+  window.sessionStorage.setItem('tm_session_id', sessionId)
+  window.localStorage.setItem('tm_active_session_id', sessionId)
+
+  console.log(`[Tracking] Session reset — new ID: ${sessionId}`)
+}
+

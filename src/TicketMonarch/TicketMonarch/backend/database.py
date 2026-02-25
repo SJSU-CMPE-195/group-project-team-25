@@ -28,6 +28,29 @@ def get_connection():
     )
 
 
+def ensure_indexes():
+    """Create indexes if they don't exist (safe to call multiple times)."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        # Check if index exists before creating
+        cursor.execute(
+            "SELECT COUNT(*) FROM information_schema.statistics "
+            "WHERE table_schema = DATABASE() AND table_name = 'user_sessions' "
+            "AND index_name = 'idx_session_start'"
+        )
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(
+                "CREATE INDEX idx_session_start ON user_sessions (session_start DESC)"
+            )
+            conn.commit()
+            print("[database] Created index idx_session_start")
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"[database] Index creation skipped: {e}")
+
+
 def init_database():
     """
     Initialize the MySQL database by ensuring required tables exist.
@@ -458,6 +481,7 @@ def get_user_sessions(page=None, limit=100):
     """
     conn = None
     cursor = None
+    rows = []
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -505,6 +529,9 @@ def get_user_sessions(page=None, limit=100):
             )
 
         rows = cursor.fetchall()
+    except Exception as e:
+        print(f"[get_user_sessions] DB error: {e}")
+        rows = []
     finally:
         if cursor is not None:
             try:
@@ -540,3 +567,82 @@ def get_user_sessions(page=None, limit=100):
             row[key] = _parse_json_field(row.get(key))
 
     return rows
+
+
+def get_recent_session_ids(limit=10):
+    """Return just session IDs (lightweight, no JSON parsing)."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT session_id FROM user_sessions ORDER BY session_start DESC LIMIT %s",
+            (limit,),
+        )
+        return [row[0] for row in cursor.fetchall()]
+    except Exception as e:
+        print(f"[get_recent_session_ids] DB error: {e}")
+        return []
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def get_session_summaries(limit=30):
+    """Return lightweight session summaries with event counts (no JSON blobs).
+
+    Uses a subquery to sort/limit on small columns first, THEN compute
+    JSON_LENGTH only on the resulting rows — avoids blowing the sort buffer.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        # Increase sort buffer for this connection in case table is large
+        cursor.execute("SET SESSION sort_buffer_size = 4194304")  # 4 MB
+        cursor.execute(
+            """
+            SELECT
+                s.session_id,
+                s.session_start,
+                s.page,
+                JSON_LENGTH(s.mouse_movements) AS mouse_count,
+                JSON_LENGTH(s.click_events) AS click_count,
+                JSON_LENGTH(s.keystroke_data) AS keystroke_count,
+                JSON_LENGTH(s.scroll_events) AS scroll_count
+            FROM (
+                SELECT session_id
+                FROM user_sessions
+                ORDER BY session_start DESC
+                LIMIT %s
+            ) AS recent
+            JOIN user_sessions s ON s.session_id = recent.session_id
+            ORDER BY s.session_start DESC
+            """,
+            (limit,),
+        )
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"[get_session_summaries] DB error: {e}")
+        return []
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass

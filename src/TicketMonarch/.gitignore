@@ -1,3 +1,35 @@
+# Python
 .venv
-__pycache__
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
 .env
+
+# Node
+node_modules/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+nul
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+
+# Model checkpoints — track the trained weights
+# (uncomment the line below to ignore them again if they get too large)
+*discard.pt
+
+# Training data (large JSON telemetry files)
+data/human/*.json
+data/bot/*.json

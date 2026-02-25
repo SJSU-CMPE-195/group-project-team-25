@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "TicketMonarch Telemetry Collector",
+  "version": "1.0.0",
+  "description": "Captures user behavior telemetry (mouse, clicks, keystrokes, scroll) for CAPTCHA defender training data.",
+  "permissions": [
+    "storage",
+    "idle",
+    "tabs",
+    "activeTab",
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

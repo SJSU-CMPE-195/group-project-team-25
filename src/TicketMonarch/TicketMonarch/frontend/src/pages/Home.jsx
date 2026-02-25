@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import './Home.css'
 
-// Sample concert data - in a real app, this would come from an API
+// real app fetch from api
 const concerts = [
   {
     id: 1,
@@ -102,4 +102,3 @@ function Home() {
 }
 
 export default Home
-

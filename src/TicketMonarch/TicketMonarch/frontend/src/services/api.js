@@ -1,5 +1,5 @@
 // Backend API base URL
-// In development we proxy /api to Flask; use a relative base path.
+// In development we proxy /api to Flask - use a relative base path.
 const API_BASE_URL = '/api'
 
 export const submitCheckout = async (checkoutData) => {
@@ -82,6 +82,19 @@ export const healthCheck = async () => {
   }
 }
 
+export const rollingEvaluate = async (sessionId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/agent/rolling`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId }),
+    })
+    return await response.json()
+  } catch (error) {
+    return { success: true, bot_probability: 0, deploy_honeypot: false, events_processed: 0, honeypot_triggered: false }
+  }
+}
+
 export const evaluateSession = async (sessionId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/agent/evaluate`, {
@@ -119,6 +132,20 @@ export const fetchLiveTelemetry = async (sessionId) => {
     const response = await fetch(`${API_BASE_URL}/agent/live/${sessionId}`)
     return await response.json()
   } catch (error) {
+    return { success: false }
+  }
+}
+
+export const confirmHumanSession = async (sessionId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/agent/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, true_label: 1 }),
+    })
+    return await response.json()
+  } catch (error) {
+    console.error('Confirm human session error:', error)
     return { success: false }
   }
 }

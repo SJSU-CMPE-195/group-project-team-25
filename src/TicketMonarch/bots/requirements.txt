@@ -1,0 +1,7 @@
+# Selenium bot
+selenium>=4.15
+webdriver-manager>=4.0
+
+# LLM bot (browser-use bundles its own LLM wrappers)
+browser-use>=0.9.0
+playwright>=1.40

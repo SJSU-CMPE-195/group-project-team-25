@@ -1,14 +1,7 @@
-{/*
-TODO
-  Live input cleanup
-  Add apartment to form data
-  Make form validation stronger
-*/}
-
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Checkout.css'
-import { submitCheckout, evaluateSession } from '../services/api'
+import { submitCheckout, rollingEvaluate } from '../services/api'
 import { forceFlush, getSessionId } from '../services/tracking'
 import ChallengeModal from '../components/ChallengeModal'
 
@@ -25,6 +18,8 @@ const US_STATES = [
   'West Virginia', 'Wisconsin', 'Wyoming'
 ]
 
+const ROLLING_POLL_MS = 3000
+
 function Checkout() {
   const navigate = useNavigate()
   const [bookingSelection, setBookingSelection] = useState(null)
@@ -37,24 +32,61 @@ function Checkout() {
     city: '',
     state: '',
     country: 'U.S.A.',
-    zip_code: ''
+    zip_code: '',
+    email_confirm: '',
+    phone_number: '',
   })
 
   const [submitMessage, setSubmitMessage] = useState('')
+  const [challengeState, setChallengeState] = useState(null)
+  const [processing, setProcessing] = useState(false)
   const [errors, setErrors] = useState({})
-  const [isEvaluating, setIsEvaluating] = useState(false)
-  const [challengeState, setChallengeState] = useState(null) // { type: 'blocked' | 'puzzle', difficulty }
+
+  // honeypot state (driven by rolling inference)
+  const [honeypotDeployed, setHoneypotDeployed] = useState(false)
+  const [honeypotTriggered, setHoneypotTriggered] = useState(false)
+  const latestRolling = useRef(null)
+  const rollingRef = useRef(null)
 
   useEffect(() => {
-    // Get booking selection from localStorage
     const selection = localStorage.getItem('bookingSelection')
     if (!selection) {
-      // If no selection, redirect to home
       navigate('/')
       return
     }
     setBookingSelection(JSON.parse(selection))
   }, [navigate])
+
+  // rolling inference polling — runs every 3s to check honeypot status
+  const pollRolling = useCallback(async () => {
+    try {
+      const sessionId = getSessionId()
+      if (!sessionId) return
+
+      await forceFlush()
+      const result = await rollingEvaluate(sessionId)
+
+      if (result.success) {
+        latestRolling.current = result
+        if (result.deploy_honeypot && !honeypotDeployed) {
+          setHoneypotDeployed(true)
+        }
+        if (result.honeypot_triggered) {
+          setHoneypotTriggered(true)
+        }
+      }
+    } catch {
+      // silently fail 
+    }
+  }, [honeypotDeployed])
+
+  useEffect(() => {
+    // start rolling polling when component mounts
+    rollingRef.current = setInterval(pollRolling, ROLLING_POLL_MS)
+    return () => {
+      if (rollingRef.current) clearInterval(rollingRef.current)
+    }
+  }, [pollRolling])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -62,6 +94,58 @@ function Checkout() {
       ...prev,
       [name]: value
     }))
+    // clear error for this field on change
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: null }))
+    }
+  }
+
+  const validateForm = () => {
+    const errs = {}
+
+    // --- required fields ---
+    if (!formData.full_name.trim()) errs.full_name = 'Name is required'
+    if (!formData.card_number.trim()) errs.card_number = 'Card number is required'
+    if (!formData.card_expiry.trim()) errs.card_expiry = 'Expiry is required'
+    if (!formData.card_cvv.trim()) errs.card_cvv = 'CVV is required'
+    if (!formData.billing_address.trim()) errs.billing_address = 'Address is required'
+    if (!formData.city.trim()) errs.city = 'City is required'
+    if (!formData.state) errs.state = 'State is required'
+    if (!formData.zip_code.trim()) errs.zip_code = 'Zip code is required'
+
+    // --- name: no numbers allowed ---
+    if (formData.full_name.trim() && /\d/.test(formData.full_name)) {
+      errs.full_name = 'Name cannot contain numbers'
+    }
+
+    // --- card number: 13-19 digits (standard range) ---
+    const digits = formData.card_number.replace(/[\s-]/g, '')
+    if (formData.card_number.trim() && !/^\d{13,19}$/.test(digits)) {
+      errs.card_number = 'Card number must be 13–19 digits'
+    }
+
+    // --- expiry: MM/YY format ---
+    if (formData.card_expiry.trim() && !/^(0[1-9]|1[0-2])\/\d{2}$/.test(formData.card_expiry.trim())) {
+      errs.card_expiry = 'Use MM/YY format'
+    }
+
+    // --- CVV: 3 or 4 digits ---
+    if (formData.card_cvv.trim() && !/^\d{3,4}$/.test(formData.card_cvv.trim())) {
+      errs.card_cvv = 'CVV must be 3 or 4 digits'
+    }
+
+    // --- zip: 5 digits or 5+4 format ---
+    if (formData.zip_code.trim() && !/^\d{5}(-\d{4})?$/.test(formData.zip_code.trim())) {
+      errs.zip_code = 'Enter a valid zip code'
+    }
+
+    // --- city: no numbers ---
+    if (formData.city.trim() && /\d/.test(formData.city)) {
+      errs.city = 'City cannot contain numbers'
+    }
+
+    setErrors(errs)
+    return Object.keys(errs).length === 0
   }
 
   const proceedWithCheckout = async () => {
@@ -85,99 +169,53 @@ function Checkout() {
     }
   }
 
-  const validateForm = () => {
-    const newErrors = {}
-
-    // Remove spaces for checking
-    const cleanCardNumber = formData.card_number.replace(/\s/g, '')
-
-    if (!/^\d{16}$/.test(cleanCardNumber)) {
-      newErrors.card_number = 'Card number must be 16 digits'
-    }
-
-    if (!/^\d{2}\/\d{2}$/.test(formData.card_expiry)) {
-      newErrors.card_expiry = 'Expiry must be in MM/YY format'
-    }
-
-    if (!/^\d{3,4}$/.test(formData.card_cvv)) {
-      newErrors.card_cvv = 'CVC must be 3 or 4 digits'
-    }
-
-    if (!formData.full_name.trim()) {
-      newErrors.full_name = 'Name is required'
-    }
-
-    if (!formData.billing_address.trim()) {
-      newErrors.billing_address = 'Address is required'
-    }
-
-    if (!formData.city.trim()) {
-      newErrors.city = 'City is required'
-    }
-
-    if (!formData.state) {
-      newErrors.state = 'State is required'
-    }
-
-    if (!/^\d{5}$/.test(formData.zip_code)) {
-      newErrors.zip_code = 'Zip code must be 5 digits'
-    }
-
-    return newErrors
-  }
-
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    if (e) e.preventDefault()
+    if (processing) return
 
-    const validationErrors = validateForm()
+    // validate before doing anything
+    if (!validateForm()) return
 
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors)
-      return
-    }
-
-    setErrors({})
+    setProcessing(true)
+    setSubmitMessage('')
 
     if (!bookingSelection) {
       setSubmitMessage('Error: No booking selection found')
+      setProcessing(false)
       return
     }
 
-    setIsEvaluating(true)
-    setSubmitMessage('')
+    // finish the rolling polls
+    if (rollingRef.current) clearInterval(rollingRef.current)
 
-    try {
-      // Flush all pending telemetry so the agent sees everything
-      await forceFlush()
-      // Small delay to let the backend persist the flush
-      await new Promise(r => setTimeout(r, 300))
+    const sessionId = getSessionId()
 
-      const sessionId = getSessionId()
-      const agentResult = await evaluateSession(sessionId)
+    // flush all remaining telemetry then run final evaluation on all the captured data
+    await forceFlush()
+    const rolling = await rollingEvaluate(sessionId)
+    const botProb = rolling?.bot_probability || 0
+    const eventsProcessed = rolling?.events_processed || 0
 
-      setIsEvaluating(false)
+    console.log(`[RL] session=${sessionId} bot_prob=${(botProb * 100).toFixed(1)}% events=${eventsProcessed} honeypot=${honeypotTriggered}`)
 
-      const decision = agentResult.decision || 'allow'
-      console.log(`[RL Agent] session=${sessionId} decision=${decision} confidence=${agentResult.confidence} events=${agentResult.events_processed}`)
-
-      if (decision === 'allow') {
-        await proceedWithCheckout()
-      } else if (decision === 'block') {
-        // Hard block — still give a hard puzzle so humans can pass
-        setChallengeState({ type: 'puzzle', difficulty: 'hard' })
-      } else if (decision.includes('puzzle')) {
-        // easy_puzzle, medium_puzzle, hard_puzzle
-        const difficulty = decision.replace('_puzzle', '') || 'medium'
-        setChallengeState({ type: 'puzzle', difficulty })
-      } else {
-        // Unknown decision — fail open
-        await proceedWithCheckout()
-      }
-    } catch (error) {
-      setIsEvaluating(false)
-      // Fail open on error
-      await proceedWithCheckout()
+    // Honeypot is always trustworthy so we give hard puzzle.
+    if (honeypotTriggered || rolling?.honeypot_triggered) {
+      setChallengeState({ type: 'puzzle', difficulty: 'hard' })
+      setProcessing(false)
+      return
     }
+
+    // High suspicion → challenge based on severity
+    if (botProb > 0.45) {
+      const difficulty = botProb > 0.7 ? 'hard' : botProb > 0.55 ? 'medium' : 'easy'
+      setChallengeState({ type: 'puzzle', difficulty })
+      setProcessing(false)
+      return
+    }
+
+    // Low suspicion → allow through
+    await proceedWithCheckout()
+    setProcessing(false)
   }
 
   const handleChallengeComplete = async (passed) => {
@@ -193,8 +231,7 @@ function Checkout() {
     return null
   }
 
-  // Get selected section from booking selection
-  const selectedSection = bookingSelection.selectedSection || 
+  const selectedSection = bookingSelection.selectedSection ||
                          (bookingSelection.seats && bookingSelection.seats[0]?.section)
   const concertName = bookingSelection.concert?.name || 'Concert'
   const ticketPrice = bookingSelection.sectionPrice || bookingSelection.total || bookingSelection.concert?.price || 0
@@ -208,9 +245,8 @@ function Checkout() {
             <span className="logo-text">Ticket Monarch</span>
           </div>
           <div className="header-icons">
-            <button 
+            <button
               onClick={() => {
-                // Go back to seat selection if we have concert info, otherwise go home
                 if (bookingSelection?.concert?.id) {
                   navigate(`/seats/${bookingSelection.concert.id}`)
                 } else {
@@ -230,95 +266,116 @@ function Checkout() {
             {submitMessage}
           </div>
         )}
-        
+
         <div className="checkout-content-wrapper">
-          {/* Left Panel - Forms */}
+          {/* forms */}
           <div className="checkout-forms">
           <form onSubmit={handleSubmit}>
-            {/* Payment Details Section */}
+            {/* payment details */}
             <div className="form-section">
               <h2 className="section-title">Payment Details</h2>
-              
+
               <div className="form-group">
-                <label htmlFor="card_number">Card Number</label>
+                <label htmlFor="card_number">Card Number <span className="required">*</span></label>
                 <input
                   type="text"
                   id="card_number"
                   name="card_number"
+                  className={errors.card_number ? 'input-error' : ''}
                   value={formData.card_number}
                   onChange={handleChange}
                   placeholder="1234 5678 9012 3456"
                 />
-                {errors.card_number && (
-                  <p className="field-error">{errors.card_number}</p>
-                )}
+                {errors.card_number && <span className="field-error">{errors.card_number}</span>}
               </div>
 
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="card_expiry">MM/YY</label>
+                  <label htmlFor="card_expiry">MM/YY <span className="required">*</span></label>
                   <input
                     type="text"
                     id="card_expiry"
                     name="card_expiry"
+                    className={errors.card_expiry ? 'input-error' : ''}
                     value={formData.card_expiry}
                     onChange={handleChange}
                     placeholder="MM/YY"
                   />
-                  {errors.card_expiry && (
-                    <p className="field-error">{errors.card_expiry}</p>
-                  )}
+                  {errors.card_expiry && <span className="field-error">{errors.card_expiry}</span>}
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="card_cvv">CVC</label>
+                  <label htmlFor="card_cvv">CVC <span className="required">*</span></label>
                   <input
                     type="text"
                     id="card_cvv"
                     name="card_cvv"
+                    className={errors.card_cvv ? 'input-error' : ''}
                     value={formData.card_cvv}
                     onChange={handleChange}
                     placeholder="123"
                   />
-                  {errors.card_cvv && (
-                    <p className="field-error">{errors.card_cvv}</p>
-                  )}
+                  {errors.card_cvv && <span className="field-error">{errors.card_cvv}</span>}
                 </div>
               </div>
 
               <div className="form-group">
-                <label htmlFor="full_name">Name on Card</label>
+                <label htmlFor="full_name">Name on Card <span className="required">*</span></label>
                 <input
                   type="text"
                   id="full_name"
                   name="full_name"
+                  className={errors.full_name ? 'input-error' : ''}
                   value={formData.full_name}
                   onChange={handleChange}
                   placeholder="John Doe"
                 />
-                {errors.full_name && (
-                    <p className="field-error">{errors.full_name}</p>
-                  )}
+                {errors.full_name && <span className="field-error">{errors.full_name}</span>}
               </div>
             </div>
 
-            {/* Billing Address Section */}
+            {/* honeypots (hidden) */}
+            <div className={honeypotDeployed ? "honeypot-field honeypot-deployed" : "honeypot-field"} aria-hidden="true" tabIndex={-1}>
+              <label htmlFor="email_confirm">Confirm Email</label>
+              <input
+                type="text"
+                id="email_confirm"
+                name="email_confirm"
+                value={formData.email_confirm}
+                onChange={handleChange}
+                autoComplete="off"
+                tabIndex={-1}
+              />
+            </div>
+            <div className={honeypotDeployed ? "honeypot-field honeypot-deployed" : "honeypot-field"} aria-hidden="true" tabIndex={-1}>
+              <label htmlFor="phone_number">Phone Number</label>
+              <input
+                type="tel"
+                id="phone_number"
+                name="phone_number"
+                value={formData.phone_number}
+                onChange={handleChange}
+                autoComplete="off"
+                tabIndex={-1}
+              />
+            </div>
+
+            {/* biling address */}
             <div className="form-section">
               <h2 className="section-title">Billing Address</h2>
-              
+
               <div className="form-group">
-                <label htmlFor="billing_address">Address</label>
+                <label htmlFor="billing_address">Address <span className="required">*</span></label>
                 <input
                   type="text"
                   id="billing_address"
                   name="billing_address"
+                  className={errors.billing_address ? 'input-error' : ''}
                   value={formData.billing_address}
                   onChange={handleChange}
                   placeholder="123 Main Street"
                 />
-                {errors.billing_address && (
-                    <p className="field-error">{errors.billing_address}</p>
-                  )}
+                {errors.billing_address && <span className="field-error">{errors.billing_address}</span>}
               </div>
 
               <div className="form-group">
@@ -333,33 +390,31 @@ function Checkout() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="city">City</label>
+                  <label htmlFor="city">City <span className="required">*</span></label>
                   <input
                     type="text"
                     id="city"
                     name="city"
+                    className={errors.city ? 'input-error' : ''}
                     value={formData.city}
                     onChange={handleChange}
                     placeholder="New York"
                   />
-                  {errors.city && (
-                    <p className="field-error">{errors.city}</p>
-                  )}
+                  {errors.city && <span className="field-error">{errors.city}</span>}
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="zip_code">Zip Code</label>
+                  <label htmlFor="zip_code">Zip Code <span className="required">*</span></label>
                   <input
                     type="text"
                     id="zip_code"
                     name="zip_code"
+                    className={errors.zip_code ? 'input-error' : ''}
                     value={formData.zip_code}
                     onChange={handleChange}
                     placeholder="10001"
                   />
-                  {errors.zip_code && (
-                    <p className="field-error">{errors.zip_code}</p>
-                  )}
+                  {errors.zip_code && <span className="field-error">{errors.zip_code}</span>}
                 </div>
               </div>
 
@@ -377,10 +432,11 @@ function Checkout() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="state">State</label>
+                  <label htmlFor="state">State <span className="required">*</span></label>
                   <select
                     id="state"
                     name="state"
+                    className={errors.state ? 'input-error' : ''}
                     value={formData.state}
                     onChange={handleChange}
                   >
@@ -389,20 +445,18 @@ function Checkout() {
                       <option key={state} value={state}>{state}</option>
                     ))}
                   </select>
-                  {errors.state && (
-                      <p className="field-error">{errors.state}</p>
-                  )}
+                  {errors.state && <span className="field-error">{errors.state}</span>}
                 </div>
               </div>
             </div>
           </form>
           </div>
 
-          {/* Right Panel - Purchase Details */}
+          {/* riight panel for purchase details */}
           <div className="checkout-summary">
           <div className="summary-section">
             <h2 className="section-title">Purchase Details</h2>
-            
+
             <div className="purchase-info">
               <div className="purchase-info-item">
                 <span className="purchase-label">Concert:</span>
@@ -440,22 +494,18 @@ function Checkout() {
               </tbody>
             </table>
 
-            <button 
+            <button
+              type="button"
               className="purchase-button"
               onClick={handleSubmit}
+              disabled={processing}
             >
-              Purchase
+              {processing ? 'Processing...' : 'Purchase'}
             </button>
           </div>
           </div>
         </div>
       </div>
-
-      {isEvaluating && (
-        <div className="evaluating-overlay">
-          <div className="evaluating-message">Verifying your session...</div>
-        </div>
-      )}
 
       {challengeState && (
         <ChallengeModal

@@ -180,12 +180,16 @@
 }
 
 .form-group input.error,
-.form-group select.error {
+.form-group select.error,
+.form-group input.input-error,
+.form-group select.input-error {
   border-color: #e74c3c;
 }
 
 .form-group input.error:focus,
-.form-group select.error:focus {
+.form-group select.error:focus,
+.form-group input.input-error:focus,
+.form-group select.input-error:focus {
   border-color: #e74c3c;
   box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
 }
@@ -200,11 +204,16 @@
   gap: 16px;
 }
 
+.error-message,
 .field-error {
   display: block;
   color: #e74c3c;
   font-size: 12px;
   margin-top: 4px;
+}
+
+.required {
+  color: #e74c3c;
 }
 
 .purchase-info {
@@ -310,7 +319,32 @@
   flex-direction: column;
 }
 
-/* Responsive Design */
+/* honeypot fields : humans cant see bots can */
+.honeypot-field {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  z-index: -1;
+}
+
+/* deployed by rl agent */
+.honeypot-field.honeypot-deployed {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  z-index: -1;
+}
+
+
+/* responsive design */
 @media (max-width: 968px) {
   .checkout-content-wrapper {
     grid-template-columns: 1fr;

@@ -15,33 +15,25 @@
   background: #fff;
   border-radius: 12px;
   padding: 2rem;
-  max-width: 420px;
+  max-width: 480px;
   width: 90%;
   text-align: center;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .challenge-modal h2 {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
+  color: #333;
 }
 
-.puzzle-question {
-  font-size: 1.2rem;
-  font-weight: 600;
-  margin: 1rem 0;
-  padding: 1rem;
-  background: #f5f5f5;
-  border-radius: 8px;
+.challenge-inner {
+  margin-top: 0.5rem;
 }
 
-.challenge-modal input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 1rem;
+.challenge-instruction {
+  color: #555;
   margin-bottom: 1rem;
-  box-sizing: border-box;
+  font-size: 0.95rem;
 }
 
 .challenge-btn {
@@ -52,6 +44,7 @@
   border-radius: 6px;
   font-size: 1rem;
   cursor: pointer;
+  margin-top: 0.5rem;
 }
 
 .challenge-btn:hover {
@@ -60,8 +53,95 @@
 
 .attempt-warning {
   color: #e74c3c;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+/* Slider Challenge (Easy) */
+
+.slider-track {
+  position: relative;
+  width: 100%;
+  height: 40px;
+  background: #e0e0e0;
+  border-radius: 20px;
+  margin: 1.5rem 0;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+
+.slider-target {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(76, 175, 80, 0.35);
+  border-left: 2px dashed #4CAF50;
+  border-right: 2px dashed #4CAF50;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.slider-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  background: #4a90d9;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  transition: none;
+}
+
+/* Canvas Text Challenge (Medium)*/
+
+.captcha-canvas {
+  display: block;
+  margin: 1rem auto;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+
+.captcha-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
   margin-top: 0.5rem;
 }
+
+.captcha-form input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  text-align: center;
+  font-family: monospace;
+}
+
+.captcha-form input:focus {
+  border-color: #4a90d9;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+}
+
+/* Timed Click Challenge (Hard) */
+
+.click-canvas {
+  display: block;
+  margin: 1rem auto;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  cursor: crosshair;
+}
+
+/* Evaluating */
 
 .evaluating-overlay {
   position: fixed;

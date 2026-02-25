@@ -133,6 +133,83 @@
   transform: translateY(0);
 }
 
+/* ── RL Update Card ─────────────────────────────────── */
+.rl-update-card {
+  margin-top: 32px;
+  padding: 20px 24px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.rl-update-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 12px 0;
+}
+
+.rl-loading { font-size: 0.85rem; color: #888; margin: 0; }
+.rl-error { font-size: 0.85rem; color: #e74c3c; margin: 0; }
+
+.rl-status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.rl-status-badge[data-status="updated"] {
+  background: #d4edda;
+  color: #155724;
+}
+.rl-status-badge[data-status="skipped"] {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.rl-reason {
+  font-size: 0.8rem;
+  color: #888;
+  margin: 8px 0 0 0;
+}
+
+.rl-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.rl-metric {
+  text-align: center;
+  padding: 8px;
+  background: white;
+  border-radius: 6px;
+}
+
+.rl-metric-value {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.rl-metric-label {
+  display: block;
+  font-size: 0.7rem;
+  color: #888;
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.rl-saved {
+  font-size: 0.8rem;
+  color: #2ecc71;
+  margin: 10px 0 0 0;
+}
+
 @media (max-width: 640px) {
   .confirmation-content {
     padding: 60px 32px;

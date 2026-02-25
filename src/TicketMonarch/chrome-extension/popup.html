@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telemetry Collector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>TicketMonarch</h1>
+    <p class="subtitle">Telemetry Collector</p>
+
+    <div class="status-row">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-text" id="statusText">Stopped</span>
+    </div>
+
+    <div class="stats" id="statsPanel">
+      <div class="stat-row">
+        <span class="stat-label">Session</span>
+        <span class="stat-value" id="sessionIdDisplay">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Segments</span>
+        <span class="stat-value" id="segmentCount">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Mouse samples</span>
+        <span class="stat-value" id="mouseCount">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Clicks</span>
+        <span class="stat-value" id="clickCount">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Keystrokes</span>
+        <span class="stat-value" id="keystrokeCount">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Scroll events</span>
+        <span class="stat-value" id="scrollCount">0</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="toggleBtn" class="btn btn-start">Start Recording</button>
+      <div class="secondary-controls">
+        <button id="exportBtn" class="btn btn-secondary" disabled>Export JSON</button>
+        <button id="clearBtn" class="btn btn-danger" disabled>Clear Data</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
