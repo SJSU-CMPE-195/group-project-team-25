@@ -542,36 +542,39 @@ def agent_confirm():
         )
 
         # ── Save session to JSON for training data ──
-        label_dir = 'human' if true_label == 1 else 'bot'
-        data_dir = Path(__file__).resolve().parent.parent.parent / 'data' / label_dir
-        data_dir.mkdir(parents=True, exist_ok=True)
+        # Only save for human sessions; bot sessions are already exported
+        # by the bot scripts themselves (telemetry_export_* files).
+        json_path = None
+        if true_label == 1:
+            data_dir = Path(__file__).resolve().parent.parent.parent / 'data' / 'human'
+            data_dir.mkdir(parents=True, exist_ok=True)
 
-        ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H-%M-%S')
-        json_path = data_dir / f'session_{session_id[:12]}_{ts}.json'
+            ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H-%M-%S')
+            json_path = data_dir / f'session_{session_id[:12]}_{ts}.json'
 
-        export_payload = {
-            'sessionId': session_id,
-            'label': true_label,
-            'exportedAt': datetime.now(timezone.utc).isoformat(),
-            'source': 'live_confirm',
-            'segments': [{
-                'mouse': db_session.get('mouse_movements') or [],
-                'clicks': db_session.get('click_events') or [],
-                'keystrokes': db_session.get('keystroke_data') or [],
-                'scroll': db_session.get('scroll_events') or [],
-            }],
-        }
-        try:
-            json_path.write_text(json.dumps(export_payload, indent=2))
-            print(f'[agent_confirm] Saved {label_dir} session to {json_path.name}')
-        except Exception as save_err:
-            print(f'[agent_confirm] WARNING: Failed to save JSON: {save_err}')
+            export_payload = {
+                'sessionId': session_id,
+                'label': true_label,
+                'exportedAt': datetime.now(timezone.utc).isoformat(),
+                'source': 'live_confirm',
+                'segments': [{
+                    'mouse': db_session.get('mouse_movements') or [],
+                    'clicks': db_session.get('click_events') or [],
+                    'keystrokes': db_session.get('keystroke_data') or [],
+                    'scroll': db_session.get('scroll_events') or [],
+                }],
+            }
+            try:
+                json_path.write_text(json.dumps(export_payload, indent=2))
+                print(f'[agent_confirm] Saved human session to {json_path.name}')
+            except Exception as save_err:
+                print(f'[agent_confirm] WARNING: Failed to save JSON: {save_err}')
 
         agent_svc = _get_agent_service()
         result = agent_svc.online_learn(session, true_label)
         result['success'] = True
         result['session_id'] = session_id
-        result['saved_json'] = str(json_path.name)
+        result['saved_json'] = str(json_path.name) if json_path else None
         return jsonify(result), 200
 
     except Exception as e:
