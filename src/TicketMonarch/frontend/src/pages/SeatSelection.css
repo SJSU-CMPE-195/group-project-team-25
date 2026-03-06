@@ -81,10 +81,10 @@
 
 .sections-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 24px;
-  max-width: 600px;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 20px;
+  max-width: 800px;
   width: 100%;
 }
 
@@ -92,14 +92,14 @@
   background-color: white;
   border: 2px solid #4a90e2;
   border-radius: 8px;
-  padding: 24px;
+  padding: 16px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 120px;
+  min-height: 80px;
 }
 
 .section-button:hover {
@@ -202,7 +202,7 @@
   }
 
   .section-button {
-    min-height: 100px;
+    min-height: 80px;
     padding: 20px;
   }
 
