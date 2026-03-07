@@ -231,10 +231,17 @@ function Checkout() {
     return null
   }
 
-  const selectedSection = bookingSelection.selectedSection ||
-                         (bookingSelection.seats && bookingSelection.seats[0]?.section)
   const concertName = bookingSelection.concert?.name || 'Concert'
-  const ticketPrice = bookingSelection.sectionPrice || bookingSelection.total || bookingSelection.concert?.price || 0
+  const seats = bookingSelection.seats || []
+  const total = bookingSelection.total || 0
+
+  // Group seats by section for the summary table
+  const sectionGroups = seats.reduce((acc, seat) => {
+    const key = seat.section
+    if (!acc[key]) acc[key] = { section: key, price: seat.price, count: 0 }
+    acc[key].count += 1
+    return acc
+  }, {})
 
   return (
     <div className="checkout-container">
@@ -452,7 +459,7 @@ function Checkout() {
           </form>
           </div>
 
-          {/* riight panel for purchase details */}
+          {/* right panel for purchase details */}
           <div className="checkout-summary">
           <div className="summary-section">
             <h2 className="section-title">Purchase Details</h2>
@@ -463,33 +470,32 @@ function Checkout() {
                 <span className="purchase-value">{concertName}</span>
               </div>
               <div className="purchase-info-item">
-                <span className="purchase-label">Section:</span>
-                <span className="purchase-value">Section {selectedSection}</span>
-              </div>
-              <div className="purchase-info-item">
-                <span className="purchase-label">Ticket Price:</span>
-                <span className="purchase-value">${ticketPrice.toFixed(2)}</span>
+                <span className="purchase-label">Total Tickets:</span>
+                <span className="purchase-value">{seats.length}</span>
               </div>
             </div>
 
             <table className="purchase-table">
               <thead>
                 <tr>
-                  <th>Tickets</th>
-                  <th>Price</th>
-                  <th>Count</th>
+                  <th>Section</th>
+                  <th>Price ea.</th>
+                  <th>Qty</th>
+                  <th>Subtotal</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>{concertName} - Section {selectedSection}</td>
-                  <td>${ticketPrice.toFixed(2)}</td>
-                  <td>1</td>
-                </tr>
+                {Object.values(sectionGroups).map(group => (
+                  <tr key={group.section}>
+                    <td>Section {group.section}</td>
+                    <td>${group.price.toFixed(2)}</td>
+                    <td>{group.count}</td>
+                    <td>${(group.price * group.count).toFixed(2)}</td>
+                  </tr>
+                ))}
                 <tr className="total-row">
-                  <td><strong>Total</strong></td>
-                  <td><strong>${ticketPrice.toFixed(2)}</strong></td>
-                  <td><strong>1</strong></td>
+                  <td colSpan={3}><strong>Total</strong></td>
+                  <td><strong>${total.toFixed(2)}</strong></td>
                 </tr>
               </tbody>
             </table>
@@ -500,7 +506,7 @@ function Checkout() {
               onClick={handleSubmit}
               disabled={processing}
             >
-              {processing ? 'Processing...' : 'Purchase'}
+              {processing ? 'Processing...' : `Purchase — $${total.toFixed(2)}`}
             </button>
           </div>
           </div>
@@ -519,4 +525,3 @@ function Checkout() {
 }
 
 export default Checkout
-
