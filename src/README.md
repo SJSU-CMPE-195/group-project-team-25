@@ -15,7 +15,7 @@ A mock concert ticket-booking web app that uses a PPO+LSTM reinforcement learnin
 ## Project Structure
 
 ```
-TicketMonarch/
+src/
 ├── TicketMonarch/          # Main web application
 │   ├── backend/            # Flask API + agent inference
 │   ├── frontend/           # React + Vite SPA
