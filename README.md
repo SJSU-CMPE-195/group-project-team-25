@@ -15,39 +15,6 @@
 
 ---
 
-## Problem Statement
-
-[2-3 sentences describing the problem you're solving and why it matters]
-
-## Solution
-
-[2-3 sentences describing your solution approach]
-
-### Key Features
-
-- Feature 1
-- Feature 2
-- Feature 3
-
----
-
-## Demo
-
-[Link to demo video or GIF]
-
-**Live Demo:** [URL if deployed]
-
----
-
-## Screenshots
-
-| Feature | Screenshot |
-|---------|------------|
-| [Feature 1] | ![Screenshot](docs/screenshots/feature1.png) |
-| [Feature 2] | ![Screenshot](docs/screenshots/feature2.png) |
-
----
-
 ## Tech Stack
 
 | Category | Technology |
@@ -68,6 +35,8 @@
 - [MySQL] 8.0+
 
 ### Installation
+
+All commands assume you are in the `src/` directory.
 
 ### 1. Create and activate a virtual environment
 
@@ -138,12 +107,6 @@ cd TicketMonarch/frontend
 npm run dev
 ```
 
-### Running Tests
-
-```bash
-[test command]
-```
-
 ---
 
 ## API Reference
@@ -187,42 +150,6 @@ src/
 ├── chrome-extension/       # Telemetry capture extension
 └── data/                   # Training data (human/ and bot/)
 ```
-
----
-
-## Contributing
-
-1. Create a feature branch (`git checkout -b feature/amazing-feature`)
-2. Commit your changes (`git commit -m 'Add amazing feature'`)
-3. Push to the branch (`git push origin feature/amazing-feature`)
-4. Open a Pull Request
-
-### Branch Naming
-
-- `feature/` - New features
-- `fix/` - Bug fixes
-- `docs/` - Documentation updates
-- `refactor/` - Code refactoring
-
-### Commit Messages
-
-Use clear, descriptive commit messages:
-- `Add user authentication endpoint`
-- `Fix database connection timeout issue`
-- `Update README with setup instructions`
-
----
-
-## Acknowledgments
-
-- [Resource/Library/Person]
-- [Resource/Library/Person]
-
----
-
-## License
-
-This project is licensed under the <FILL IN> License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
