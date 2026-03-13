@@ -25,6 +25,47 @@ class DBConfig:
 
 
 @dataclass
+class FeatureConfig:
+    """Feature extraction parameters for the session-level classifier."""
+
+    mouse_speed_cap: float = 10_000.0      # px/s — clamp extreme speeds
+    jitter_threshold: float = 3.0          # px — movements below this are jitter
+    pause_threshold_ms: float = 500.0      # ms — gaps longer than this count as pauses
+
+
+@dataclass
+class ClassifierConfig:
+    """XGBoost hyperparameters for the human-likelihood classifier.
+
+    Tuned for generalization on small datasets (~100 sessions).
+    Regularization is intentionally strong to avoid memorizing the
+    training set and to encourage the model to learn transferable
+    behavioral patterns.
+    """
+
+    n_estimators: int = 50
+    max_depth: int = 2                     # very shallow trees reduce overfitting
+    learning_rate: float = 0.05            # slow learning + early stopping
+    subsample: float = 0.7                 # row subsampling per tree
+    colsample_bytree: float = 0.7          # feature subsampling per tree
+    min_child_weight: int = 5              # prevent leaf nodes with few samples
+    reg_alpha: float = 0.3                 # L1 regularization
+    reg_lambda: float = 2.0                # L2 regularization
+    gamma: float = 0.3                     # min loss reduction for a split
+    eval_metric: str = "logloss"
+    early_stopping_rounds: int = 20
+    random_state: int = 42
+
+    # Label smoothing: shift hard 0/1 labels toward 0.5 to encourage
+    # calibrated probability outputs and reduce overconfidence.
+    label_smooth_alpha: float = 0.05       # 0→0.05, 1→0.95
+
+    # Feature noise augmentation: add Gaussian noise to training features
+    # to simulate data variation and prevent reliance on exact values.
+    feature_noise_std: float = 0.5          # std of noise relative to feature std
+
+
+@dataclass
 class EventEnvConfig:
     """Windowed Gymnasium environment parameters.
 
