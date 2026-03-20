@@ -267,9 +267,16 @@ class EventEncoder:
         return vec
 
 
-def _augment_bot_timeline(events: list[dict], config: EventEnvConfig) -> list[dict]:
-    """Perturb a bot session's timeline to make it harder to distinguish from
-    human data.  Applied stochastically during training so the agent can't
+def _augment_timeline(
+    events: list[dict],
+    config: EventEnvConfig,
+    position_noise_std: float,
+    timing_jitter_std: float,
+    speed_warp_range: tuple,
+) -> list[dict]:
+    """Perturb a session's timeline with configurable noise levels.
+
+    Applied stochastically during training so the agent can't
     rely on trivially separable features (zero variance, locked positions).
 
     Perturbations:
@@ -283,7 +290,7 @@ def _augment_bot_timeline(events: list[dict], config: EventEnvConfig) -> list[di
     rng = random.Random()
 
     # --- 1. Speed warp: stretch/compress all timestamps ----------------
-    lo, hi = config.aug_speed_warp_range
+    lo, hi = speed_warp_range
     warp_factor = rng.uniform(lo, hi)
 
     # Anchor at the first timestamp so the session start doesn't drift
@@ -299,22 +306,22 @@ def _augment_bot_timeline(events: list[dict], config: EventEnvConfig) -> list[di
         t_warped = t0 + (t_orig - t0) * warp_factor
 
         # --- 2. Timing jitter ------------------------------------------
-        t_warped += rng.gauss(0, config.aug_timing_jitter_std)
+        t_warped += rng.gauss(0, timing_jitter_std)
         e[t_key] = max(0, t_warped)
 
         # --- 3. Position noise ------------------------------------------
         if "x" in e and e["x"] is not None:
             e["x"] = max(0, min(config.max_coord_x,
-                                e["x"] + rng.gauss(0, config.aug_position_noise_std)))
+                                e["x"] + rng.gauss(0, position_noise_std)))
         if "y" in e and e["y"] is not None:
             e["y"] = max(0, min(config.max_coord_y,
-                                e["y"] + rng.gauss(0, config.aug_position_noise_std)))
+                                e["y"] + rng.gauss(0, position_noise_std)))
         if "pageX" in e and e["pageX"] is not None:
             e["pageX"] = max(0, min(config.max_coord_x,
-                                    e["pageX"] + rng.gauss(0, config.aug_position_noise_std)))
+                                    e["pageX"] + rng.gauss(0, position_noise_std)))
         if "pageY" in e and e["pageY"] is not None:
             e["pageY"] = max(0, min(config.max_coord_y,
-                                    e["pageY"] + rng.gauss(0, config.aug_position_noise_std)))
+                                    e["pageY"] + rng.gauss(0, position_noise_std)))
 
         augmented.append(e)
 
@@ -401,11 +408,24 @@ class EventEnv(gym.Env):
 
         timeline = self._encoder.build_timeline(session)
 
-        # Augment bot sessions stochastically during training
-        if (self.config.augment
-                and session.label == 0
-                and random.random() < self.config.augment_prob):
-            timeline = _augment_bot_timeline(timeline, self.config)
+        # Augment sessions stochastically during training
+        if self.config.augment and random.random() < self.config.augment_prob:
+            if session.label == 0:
+                # Bot: heavier perturbation
+                timeline = _augment_timeline(
+                    timeline, self.config,
+                    self.config.aug_position_noise_std,
+                    self.config.aug_timing_jitter_std,
+                    self.config.aug_speed_warp_range,
+                )
+            elif self.config.augment_human:
+                # Human: lighter perturbation to simulate natural variation
+                timeline = _augment_timeline(
+                    timeline, self.config,
+                    self.config.aug_human_position_noise_std,
+                    self.config.aug_human_timing_jitter_std,
+                    self.config.aug_human_speed_warp_range,
+                )
 
         # Split timeline into overlapping windows
         ws = self.config.window_size

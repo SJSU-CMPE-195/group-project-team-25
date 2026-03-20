@@ -132,12 +132,17 @@ class EventEnvConfig:
     honeypot_trigger_rate_bot: float = 0.6
     honeypot_trigger_rate_human: float = 0.01
 
-    # Data augmentation (applied to BOT sessions only, per-episode during training)
+    # Data augmentation (per-episode during training)
     augment: bool = True              # enable stochastic augmentation
-    augment_prob: float = 0.5         # probability of augmenting each bot episode
+    augment_prob: float = 0.5         # probability of augmenting each episode
     aug_position_noise_std: float = 15.0   # Gaussian noise on x/y coords (px)
     aug_timing_jitter_std: float = 30.0    # Gaussian noise on timestamps (ms)
     aug_speed_warp_range: tuple = (0.7, 1.4)  # random time stretch/compress
+    # Human augmentation uses lighter perturbation to simulate natural variation
+    augment_human: bool = True
+    aug_human_position_noise_std: float = 5.0    # lighter jitter than bots
+    aug_human_timing_jitter_std: float = 15.0    # lighter timing noise
+    aug_human_speed_warp_range: tuple = (0.85, 1.15)  # narrower warp
 
     # Normalization constants for event encoding
     max_coord_x: float = 1920.0
@@ -156,7 +161,7 @@ class PPOConfig:
     gae_lambda: float = 0.95
     clip_eps: float = 0.2
     value_loss_coeff: float = 0.5
-    entropy_coeff: float = 0.005
+    entropy_coeff: float = 0.02
     max_grad_norm: float = 0.5
 
     # LSTM

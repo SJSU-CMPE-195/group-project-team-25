@@ -134,7 +134,7 @@ class DGLSTM(PPOLSTM):
 
                 # DG gradient: w_t · U_t · ∇_θ log π_θ(A_t | H_t)
                 # As a loss to minimize: −(gate · advantage · log_prob)
-                dg_loss = -(gate.detach() * advantages * new_log_probs).mean()
+                dg_loss = -(gate.detach() * advantages.detach() * new_log_probs).mean()
 
                 # Optionally blend with PPO clipped surrogate for stability
                 if self.dg_baseline_weight > 0:

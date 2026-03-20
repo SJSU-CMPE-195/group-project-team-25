@@ -108,37 +108,58 @@ def plot_comparison(
     plt.close(fig)
     print(f"  Saved cmp_accuracy.{fmt}")
 
-    # ── 3. Policy loss comparison ────────────────────────────────────
+    # ── 3. Policy Loss + Entropy (2-panel) ──────────────────────────
+    # Policy loss measures different objectives for PPO vs DG, so we
+    # plot each on its own y-axis alongside entropy to show the
+    # confidence–calibration tradeoff.
     ppo_ploss = np.array([r.get("policy_loss", 0) for r in ppo_rollouts])
     dg_ploss = np.array([r.get("policy_loss", 0) for r in dg_rollouts])
-
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.plot(ppo_steps_k, smooth(ppo_ploss, 10), color=PPO_COLOR, linewidth=2, label="PPO")
-    ax.plot(dg_steps_k, smooth(dg_ploss, 10), color=DG_COLOR, linewidth=2, label="DG")
-    ax.set_xlabel("Training Steps (×1K)")
-    ax.set_ylabel("Policy Loss")
-    ax.set_title("PPO vs DG — Policy Loss")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    fig.savefig(out_dir / f"cmp_policy_loss.{fmt}")
-    plt.close(fig)
-    print(f"  Saved cmp_policy_loss.{fmt}")
-
-    # ── 4. Entropy comparison ────────────────────────────────────────
     ppo_ent = np.array([r.get("entropy", 0) for r in ppo_rollouts])
     dg_ent = np.array([r.get("entropy", 0) for r in dg_rollouts])
 
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.plot(ppo_steps_k, smooth(ppo_ent, 10), color=PPO_COLOR, linewidth=2, label="PPO")
-    ax.plot(dg_steps_k, smooth(dg_ent, 10), color=DG_COLOR, linewidth=2, label="DG")
-    ax.set_xlabel("Training Steps (×1K)")
-    ax.set_ylabel("Policy Entropy")
-    ax.set_title("PPO vs DG — Exploration (Entropy)")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    fig.savefig(out_dir / f"cmp_entropy.{fmt}")
+    fig, (ax_loss, ax_ent) = plt.subplots(1, 2, figsize=(14, 4.5))
+
+    # Left panel: each algorithm's loss on its own y-axis
+    ax_ppo = ax_loss
+    ax_dg = ax_loss.twinx()
+    ln1 = ax_ppo.plot(ppo_steps_k, smooth(ppo_ploss, 10), color=PPO_COLOR,
+                      linewidth=2, label="PPO (clipped surrogate)")
+    ln2 = ax_dg.plot(dg_steps_k, smooth(dg_ploss, 10), color=DG_COLOR,
+                     linewidth=2, label="DG (delight gradient)")
+    ax_ppo.set_xlabel("Training Steps (×1K)")
+    ax_ppo.set_ylabel("PPO Policy Loss", color=PPO_COLOR)
+    ax_dg.set_ylabel("DG Policy Loss", color=DG_COLOR)
+    ax_ppo.tick_params(axis="y", labelcolor=PPO_COLOR)
+    ax_dg.tick_params(axis="y", labelcolor=DG_COLOR)
+    lns = ln1 + ln2
+    ax_loss.legend(lns, [l.get_label() for l in lns], loc="upper right", fontsize=9)
+    ax_loss.set_title("Policy Loss (separate scales)")
+    ax_loss.grid(True, alpha=0.3)
+
+    # Right panel: entropy on shared axis
+    ax_ent.plot(ppo_steps_k, smooth(ppo_ent, 10), color=PPO_COLOR, linewidth=2, label="PPO")
+    ax_ent.plot(dg_steps_k, smooth(dg_ent, 10), color=DG_COLOR, linewidth=2, label="DG")
+    ax_ent.set_xlabel("Training Steps (×1K)")
+    ax_ent.set_ylabel("Policy Entropy")
+    ax_ent.set_title("Decision Confidence (Entropy)")
+    ax_ent.legend()
+    ax_ent.grid(True, alpha=0.3)
+    ax_ent.annotate("PPO collapses → overconfident",
+                    xy=(ppo_steps_k[-1], smooth(ppo_ent, 10)[-1]),
+                    xytext=(-120, 40), textcoords="offset points",
+                    fontsize=8, color=PPO_COLOR, fontstyle="italic",
+                    arrowprops=dict(arrowstyle="->", color=PPO_COLOR, lw=1.2))
+    ax_ent.annotate("DG stays calibrated",
+                    xy=(dg_steps_k[-1], smooth(dg_ent, 10)[-1]),
+                    xytext=(-100, -40), textcoords="offset points",
+                    fontsize=8, color=DG_COLOR, fontstyle="italic",
+                    arrowprops=dict(arrowstyle="->", color=DG_COLOR, lw=1.2))
+
+    fig.suptitle("PPO vs DG — Optimization Landscape", fontsize=13, fontweight="bold")
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.savefig(out_dir / f"cmp_loss_entropy.{fmt}")
     plt.close(fig)
-    print(f"  Saved cmp_entropy.{fmt}")
+    print(f"  Saved cmp_loss_entropy.{fmt}")
 
     # ── 5. Eval metrics side-by-side bar chart ───────────────────────
     if ppo_eval and dg_eval:
@@ -236,14 +257,17 @@ def plot_comparison(
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    # (c) Policy Loss
+    # (c) Policy Loss (dual y-axis)
     ax = axes[0, 2]
+    ax_dg2 = ax.twinx()
     ax.plot(ppo_steps_k, smooth(ppo_ploss, 10), color=PPO_COLOR, linewidth=2, label="PPO")
-    ax.plot(dg_steps_k, smooth(dg_ploss, 10), color=DG_COLOR, linewidth=2, label="DG")
+    ax_dg2.plot(dg_steps_k, smooth(dg_ploss, 10), color=DG_COLOR, linewidth=2, label="DG")
     ax.set_xlabel("Steps (×1K)")
-    ax.set_ylabel("Policy Loss")
-    ax.set_title("(c) Policy Loss")
-    ax.legend(fontsize=9)
+    ax.set_ylabel("PPO Loss", color=PPO_COLOR, fontsize=9)
+    ax_dg2.set_ylabel("DG Loss", color=DG_COLOR, fontsize=9)
+    ax.tick_params(axis="y", labelcolor=PPO_COLOR, labelsize=8)
+    ax_dg2.tick_params(axis="y", labelcolor=DG_COLOR, labelsize=8)
+    ax.set_title("(c) Policy Loss (separate scales)")
     ax.grid(True, alpha=0.3)
 
     # (d) Entropy
@@ -252,7 +276,7 @@ def plot_comparison(
     ax.plot(dg_steps_k, smooth(dg_ent, 10), color=DG_COLOR, linewidth=2, label="DG")
     ax.set_xlabel("Steps (×1K)")
     ax.set_ylabel("Entropy")
-    ax.set_title("(d) Policy Entropy")
+    ax.set_title("(d) Decision Confidence (Entropy)")
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 

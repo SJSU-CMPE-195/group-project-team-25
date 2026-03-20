@@ -410,20 +410,44 @@ def _pick_concert(driver, move_fn):
 
 
 def _pick_section(driver, move_fn):
-    """Click a section button on the seat selection page, then Continue."""
-    wait_for(driver, ".section-button", timeout=10)
-    sections = driver.find_elements(By.CSS_SELECTOR, ".section-button")
-    if not sections:
-        print("  WARNING: No .section-button found")
-        return False
-    target = random.choice(sections)
-    move_fn(driver, target)
+    """Select tickets on the seat selection page, then click Checkout.
 
-    wait_for(driver, ".continue-button", timeout=5)
-    cont_btn = driver.find_element(By.CSS_SELECTOR, ".continue-button")
-    move_fn(driver, cont_btn)
-    wait_for_url(driver, "/checkout")
-    return True
+    The UI uses a stadium grid with stepper buttons (+/-) per section.
+    We pick 1-3 random sections and add 1-4 tickets each, then click
+    the checkout button.
+    """
+    wait_for(driver, ".ss-section-cell", timeout=10)
+    cells = driver.find_elements(By.CSS_SELECTOR, ".ss-section-cell")
+    if not cells:
+        print("  WARNING: No .ss-section-cell found")
+        return False
+
+    # Pick 1-3 random sections
+    num_sections = min(random.randint(1, 3), len(cells))
+    chosen = random.sample(cells, num_sections)
+
+    for cell in chosen:
+        # The "+" button is the second .ss-step-btn inside the cell
+        plus_buttons = cell.find_elements(By.CSS_SELECTOR, ".ss-step-btn")
+        if len(plus_buttons) < 2:
+            continue
+        plus_btn = plus_buttons[1]  # [0]=minus, [1]=plus
+
+        # Click + between 1 and 4 times to add tickets
+        num_tickets = random.randint(1, 4)
+        for _ in range(num_tickets):
+            move_fn(driver, plus_btn)
+            time.sleep(random.uniform(0.15, 0.4))
+
+    # Click the checkout button
+    try:
+        checkout_btn = wait_for(driver, ".ss-checkout-btn", timeout=5)
+        move_fn(driver, checkout_btn)
+        wait_for_url(driver, "/checkout")
+        return True
+    except Exception:
+        print("  WARNING: Could not click checkout button")
+        return False
 
 
 def _handle_challenge(driver, move_fn, max_retries=3):
