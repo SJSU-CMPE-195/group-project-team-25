@@ -1,9 +1,15 @@
-"""Train the PPO+LSTM event-level CAPTCHA agent.
+"""Train the PPO+LSTM or DG+LSTM event-level CAPTCHA agent.
 
 Usage:
     python -m rl_captcha.scripts.train_ppo \
         --data-dir data/ \
         --save-path rl_captcha/agent/checkpoints/ppo_run1 \
+        --total-timesteps 500000
+
+    python -m rl_captcha.scripts.train_ppo \
+        --algorithm dg \
+        --data-dir data/ \
+        --save-path rl_captcha/agent/checkpoints/dg_run1 \
         --total-timesteps 500000
 """
 
@@ -20,6 +26,7 @@ from rl_captcha.config import Config
 from rl_captcha.data.loader import load_from_directory, split_sessions
 from rl_captcha.environment.event_env import EventEnv
 from rl_captcha.agent.ppo_lstm import PPOLSTM
+from rl_captcha.agent.dg_lstm import DGLSTM, DGConfig
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,6 +47,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--device", type=str, default="auto")
     p.add_argument("--split-seed", type=int, default=42,
                     help="Random seed for train/val/test split")
+    p.add_argument("--lr", type=float, default=None,
+                    help="Override learning rate (default from PPOConfig)")
+    p.add_argument("--fp-penalty", type=float, default=None,
+                    help="Override false-positive penalty (default: -1.0)")
+    p.add_argument("--algorithm", type=str, default="ppo",
+                    choices=["ppo", "dg"],
+                    help="Training algorithm: ppo or dg (default: ppo)")
+    p.add_argument("--dg-temperature", type=float, default=1.0,
+                    help="DG sigmoid temperature η (default: 1.0)")
+    p.add_argument("--dg-blend", type=float, default=0.0,
+                    help="DG-PPO blend weight: 0=pure DG, 1=pure PPO (default: 0.0)")
     return p.parse_args()
 
 
@@ -55,6 +73,10 @@ def main():
 
     if args.total_timesteps is not None:
         cfg.ppo.total_timesteps = args.total_timesteps
+    if args.lr is not None:
+        cfg.ppo.lr = args.lr
+    if args.fp_penalty is not None:
+        cfg.event_env.penalty_false_positive = args.fp_penalty
 
     # Load data
     print(f"Loading sessions from {args.data_dir}...")
@@ -86,12 +108,27 @@ def main():
     else:
         val_env = None
 
-    agent = PPOLSTM(
-        obs_dim=cfg.event_env.event_dim,
-        action_dim=7,
-        config=cfg.ppo,
-        device=args.device,
-    )
+    if args.algorithm == "dg":
+        dg_cfg = DGConfig(
+            **{k: getattr(cfg.ppo, k) for k in cfg.ppo.__dataclass_fields__},
+            dg_temperature=args.dg_temperature,
+            dg_baseline_weight=args.dg_blend,
+        )
+        agent = DGLSTM(
+            obs_dim=cfg.event_env.event_dim,
+            action_dim=7,
+            config=dg_cfg,
+            device=args.device,
+        )
+        print(f"  Algorithm: DG (temp={args.dg_temperature}, blend={args.dg_blend})")
+    else:
+        agent = PPOLSTM(
+            obs_dim=cfg.event_env.event_dim,
+            action_dim=7,
+            config=cfg.ppo,
+            device=args.device,
+        )
+        print(f"  Algorithm: PPO")
     print(f"  Device: {agent.device}")
     print(f"  Rollout steps: {cfg.ppo.rollout_steps}")
     print(f"  Total timesteps: {cfg.ppo.total_timesteps}")
@@ -278,9 +315,13 @@ def _print_rollout_stats(
           f"Avg windows: {avg_windows:.1f}")
 
     if update_metrics:
-        print(f"  Policy loss: {update_metrics.get('policy_loss', 0):.4f} | "
-              f"Value loss: {update_metrics.get('value_loss', 0):.4f} | "
-              f"Entropy: {update_metrics.get('entropy', 0):.4f}")
+        line = (f"  Policy loss: {update_metrics.get('policy_loss', 0):.4f} | "
+                f"Value loss: {update_metrics.get('value_loss', 0):.4f} | "
+                f"Entropy: {update_metrics.get('entropy', 0):.4f}")
+        if "delight_mean" in update_metrics:
+            line += (f"\n  Delight: {update_metrics['delight_mean']:.4f} | "
+                     f"Gate: {update_metrics['gate_mean']:.4f}")
+        print(line)
 
     # Outcome breakdown
     total_outcomes = sum(outcomes.values())

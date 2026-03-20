@@ -240,13 +240,13 @@ def _idle_fidget(driver, duration: float = None):
 
         if behavior == "drift":
             # Slow drift in a random direction (reading, scanning)
-            steps = random.randint(5, 15)
-            dx_bias = random.gauss(0, 20)
-            dy_bias = random.gauss(0, 12)
+            steps = random.randint(8, 20)
+            dx_bias = random.gauss(0, 80)
+            dy_bias = random.gauss(0, 50)
             actions = ActionChains(driver)
             for _ in range(steps):
-                dx = int(dx_bias / steps + random.gauss(0, 2))
-                dy = int(dy_bias / steps + random.gauss(0, 1.5))
+                dx = int(dx_bias / steps + random.gauss(0, 5))
+                dy = int(dy_bias / steps + random.gauss(0, 4))
                 if dx != 0 or dy != 0:
                     actions.move_by_offset(dx, dy)
                 pause = random.uniform(0.03, 0.12)
@@ -258,12 +258,12 @@ def _idle_fidget(driver, duration: float = None):
                 pass
 
         elif behavior == "jitter":
-            # Tiny tremor-like movements (hand not perfectly steady)
+            # Tremor-like movements (hand not perfectly steady)
             actions = ActionChains(driver)
-            jitter_count = random.randint(3, 8)
+            jitter_count = random.randint(4, 10)
             for _ in range(jitter_count):
-                dx = random.randint(-3, 3)
-                dy = random.randint(-2, 2)
+                dx = random.randint(-12, 12)
+                dy = random.randint(-8, 8)
                 if dx != 0 or dy != 0:
                     actions.move_by_offset(dx, dy)
                 pause = random.uniform(0.02, 0.08)
@@ -275,10 +275,10 @@ def _idle_fidget(driver, duration: float = None):
                 pass
 
         elif behavior == "circle":
-            # Small circular/arc movement (hovering indecisively)
+            # Circular/arc movement (hovering indecisively)
             actions = ActionChains(driver)
-            radius = random.uniform(8, 30)
-            arc_steps = random.randint(6, 12)
+            radius = random.uniform(25, 80)
+            arc_steps = random.randint(8, 16)
             start_angle = random.uniform(0, 2 * math.pi)
             for i in range(arc_steps):
                 angle = start_angle + (i / arc_steps) * math.pi * random.uniform(0.5, 1.5)
@@ -301,11 +301,65 @@ def _idle_fidget(driver, duration: float = None):
             elapsed += pause
 
 
+def _page_sweep(driver):
+    """Move mouse across a large area of the page — simulates a human visually
+    scanning the page (looking at header, sidebar, content, footer).
+
+    This is critical for spatial diversity: humans don't keep the mouse near
+    one element — they sweep across hundreds of pixels while browsing.
+    """
+    # Pick 2-4 random target regions across the viewport
+    num_targets = random.randint(2, 4)
+    actions = ActionChains(driver)
+
+    for _ in range(num_targets):
+        # Random point across the full viewport
+        target_x = random.randint(-400, 400)
+        target_y = random.randint(-300, 300)
+
+        # Move there in a Bezier-like curve with multiple steps
+        steps = random.randint(12, 25)
+        curve_x = random.uniform(-60, 60)
+        curve_y = random.uniform(-40, 40)
+
+        for i in range(steps):
+            t = (i + 1) / steps
+            t_eased = t * t * (3 - 2 * t)
+            remaining = 1 - t_eased
+
+            dx = int(target_x / steps + curve_x * remaining * math.sin(t * math.pi) / steps
+                     + random.gauss(0, 3))
+            dy = int(target_y / steps + curve_y * remaining * math.sin(t * math.pi) / steps
+                     + random.gauss(0, 2))
+            if dx != 0 or dy != 0:
+                actions.move_by_offset(dx, dy)
+            actions.pause(random.uniform(0.01, 0.04))
+
+        # Pause at the target (reading/looking)
+        actions.pause(random.uniform(0.3, 1.0))
+
+    try:
+        actions.perform()
+    except Exception:
+        pass
+
+
+def _dispatch_wheel(driver, dy: int):
+    """Scroll by dispatching a real WheelEvent so tracking.js captures it."""
+    driver.execute_script("""
+        var dy = arguments[0];
+        window.dispatchEvent(new WheelEvent('wheel', {
+            deltaY: dy, deltaMode: 0, bubbles: true, cancelable: true
+        }));
+        window.scrollBy(0, dy);
+    """, dy)
+
+
 def _random_scroll(driver, scrolls: int = 2):
     """Scroll up and down randomly to simulate browsing."""
     for _ in range(scrolls):
         dy = random.randint(100, 400) * random.choice([1, -1])
-        driver.execute_script(f"window.scrollBy(0, {dy});")
+        _dispatch_wheel(driver, dy)
         time.sleep(random.uniform(0.3, 0.8))
 
 
@@ -324,7 +378,7 @@ def _human_scroll(driver, scrolls: int = 3):
             step_dy = int(total_dy / num_steps * factor)
             if step_dy == 0:
                 break
-            driver.execute_script(f"window.scrollBy(0, {step_dy});")
+            _dispatch_wheel(driver, step_dy)
             time.sleep(random.uniform(0.02, 0.08))
 
         # Pause between scroll gestures
@@ -606,10 +660,12 @@ def _fill_checkout(driver, type_fn, move_fn):
 def linear_bot(driver):
     """Straight-line mouse, uniform typing with slight variance."""
     _go_home(driver)
+    _page_sweep(driver)
     _idle_fidget(driver, random.uniform(0.5, 1.5))
 
     if not _pick_concert(driver, _linear_move_and_click):
         return
+    _page_sweep(driver)
     _idle_fidget(driver, random.uniform(0.3, 1.0))
 
     if not _pick_section(driver, _linear_move_and_click):
@@ -622,14 +678,17 @@ def linear_bot(driver):
 def scripted_bot(driver):
     """Bezier curve mouse, human-like typing, scrolling. More sophisticated."""
     _go_home(driver)
+    _page_sweep(driver)
     _idle_fidget(driver, random.uniform(1.0, 3.0))
 
     # Browse around first
     _human_scroll(driver, scrolls=random.randint(1, 3))
+    _page_sweep(driver)
     _idle_fidget(driver, random.uniform(0.5, 1.5))
 
     if not _pick_concert(driver, _human_move_and_click):
         return
+    _page_sweep(driver)
     _idle_fidget(driver, random.uniform(0.8, 2.0))
 
     # Look at seats
@@ -638,9 +697,207 @@ def scripted_bot(driver):
 
     if not _pick_section(driver, _human_move_and_click):
         return
+    _page_sweep(driver)
     _idle_fidget(driver, random.uniform(0.5, 1.5))
 
     _fill_checkout(driver, _type_human, _human_move_and_click)
+
+
+def tabber_bot(driver):
+    """Keyboard-only bot — navigates entirely via Tab/Enter, no mouse at all.
+    Easy to detect: zero mouse events, perfectly regular key timing."""
+    _go_home(driver)
+    time.sleep(random.uniform(1.0, 2.0))
+
+    # Tab to a tickets button and press Enter
+    body = driver.find_element(By.TAG_NAME, "body")
+    tab_count = random.randint(5, 15)
+    for _ in range(tab_count):
+        body.send_keys(Keys.TAB)
+        time.sleep(random.uniform(0.08, 0.15))
+    body.send_keys(Keys.ENTER)
+
+    try:
+        wait_for_url(driver, "/seats/", timeout=5)
+    except Exception:
+        # Fallback: click directly
+        if not _pick_concert(driver, _linear_move_and_click):
+            return
+
+    time.sleep(random.uniform(0.5, 1.0))
+
+    # Tab to section + continue
+    for _ in range(random.randint(3, 8)):
+        body.send_keys(Keys.TAB)
+        time.sleep(random.uniform(0.08, 0.15))
+    body.send_keys(Keys.ENTER)
+    time.sleep(0.5)
+
+    for _ in range(random.randint(2, 5)):
+        body.send_keys(Keys.TAB)
+        time.sleep(random.uniform(0.08, 0.15))
+    body.send_keys(Keys.ENTER)
+
+    try:
+        wait_for_url(driver, "/checkout", timeout=5)
+    except Exception:
+        if not _pick_section(driver, _linear_move_and_click):
+            return
+
+    time.sleep(random.uniform(0.5, 1.0))
+    _fill_checkout(driver, _type_uniform, _linear_move_and_click)
+
+
+def slow_bot(driver):
+    """Slow methodical bot — long pauses between actions (5-10s), very regular.
+    Mimics a careful person but timing is unnaturally consistent."""
+    _go_home(driver)
+    time.sleep(random.uniform(5.0, 10.0))
+
+    _human_scroll(driver, scrolls=1)
+    time.sleep(random.uniform(5.0, 8.0))
+
+    if not _pick_concert(driver, _human_move_and_click):
+        return
+    time.sleep(random.uniform(5.0, 10.0))
+
+    _human_scroll(driver, scrolls=1)
+    time.sleep(random.uniform(4.0, 7.0))
+
+    if not _pick_section(driver, _human_move_and_click):
+        return
+    time.sleep(random.uniform(5.0, 8.0))
+
+    _fill_checkout(driver, _type_human, _human_move_and_click)
+
+
+def erratic_bot(driver):
+    """Erratic bot — random mouse movements everywhere, clicks randomly,
+    eventually finds the right elements. High spatial diversity but
+    unnatural patterns (no purposeful movement toward targets)."""
+    _go_home(driver)
+
+    # Thrash mouse around randomly
+    for _ in range(random.randint(3, 6)):
+        _page_sweep(driver)
+        _random_scroll(driver, scrolls=random.randint(1, 3))
+        time.sleep(random.uniform(0.1, 0.3))
+
+    # Random clicks on whatever is nearby
+    actions = ActionChains(driver)
+    for _ in range(random.randint(3, 8)):
+        actions.move_by_offset(random.randint(-200, 200), random.randint(-150, 150))
+        actions.click()
+        actions.pause(random.uniform(0.1, 0.3))
+    try:
+        actions.perform()
+    except Exception:
+        pass
+
+    time.sleep(random.uniform(0.3, 0.8))
+
+    if not _pick_concert(driver, _human_move_and_click):
+        return
+
+    # More thrashing on seats page
+    for _ in range(random.randint(2, 4)):
+        _page_sweep(driver)
+        time.sleep(random.uniform(0.1, 0.3))
+
+    if not _pick_section(driver, _human_move_and_click):
+        return
+
+    # Erratic checkout — fidget excessively between fields
+    _fill_checkout(driver, _type_human, _human_move_and_click)
+
+
+def speedrun_bot(driver):
+    """Speed-run bot — completes the entire flow as fast as possible.
+    Minimal mouse movement, instant typing, near-zero pauses.
+    Very easy to detect: session duration is unnaturally short."""
+    _go_home(driver)
+    time.sleep(0.3)
+
+    if not _pick_concert(driver, _linear_move_and_click):
+        return
+    time.sleep(0.2)
+
+    if not _pick_section(driver, _linear_move_and_click):
+        return
+    time.sleep(0.2)
+
+    # Instant typing — machine speed
+    form = get_form_data()
+    wait_for(driver, "#card_number", timeout=10)
+
+    known_values = {
+        "card_number": form["card_number"],
+        "card_expiry": form["card_expiry"],
+        "card_cvv": form["card_cvv"],
+        "full_name": form["full_name"],
+        "billing_address": form["billing_address"],
+        "apartment": form["apartment"],
+        "city": form["city"],
+        "zip_code": form["zip_code"],
+    }
+
+    GENERIC_FILLERS = [
+        "test@email.com", "5551234567", "John Doe", "123 Main St",
+        "Springfield", "12345", "some value",
+    ]
+
+    all_inputs = driver.find_elements(By.CSS_SELECTOR,
+        "input[type='text'], input[type='tel'], input[type='email'], input:not([type])")
+    filler_idx = 0
+
+    for inp in all_inputs:
+        try:
+            field_id = inp.get_attribute("id") or inp.get_attribute("name") or ""
+            if not field_id:
+                continue
+            value = known_values.get(field_id)
+            if value is None:
+                value = GENERIC_FILLERS[filler_idx % len(GENERIC_FILLERS)]
+                filler_idx += 1
+            if not value:
+                continue
+
+            if not inp.is_displayed():
+                driver.execute_script("""
+                    var el = arguments[0]; var value = arguments[1];
+                    var setter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype, 'value').set;
+                    setter.call(el, value);
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                """, inp, value)
+            else:
+                inp.click()
+                # Blast all chars at once — inhuman speed
+                for char in value:
+                    inp.send_keys(char)
+                    time.sleep(random.uniform(0.005, 0.015))
+            time.sleep(random.uniform(0.05, 0.1))
+        except Exception:
+            pass
+
+    try:
+        state_el = driver.find_element(By.ID, "state")
+        Select(state_el).select_by_visible_text(form["state"])
+        time.sleep(0.1)
+    except Exception:
+        pass
+
+    try:
+        purchase = wait_for(driver, ".purchase-button", timeout=5)
+        purchase.click()
+    except Exception:
+        pass
+
+    try:
+        wait_for_url(driver, "/confirmation", timeout=5)
+    except Exception:
+        _handle_challenge(driver, _linear_move_and_click)
 
 
 def replay_bot(driver, source_path: str):
@@ -769,7 +1026,7 @@ def _replay_scroll(driver, scroll_events: list[dict], max_events: int = 10):
 
         # Add noise to scroll amount
         dy = int(dy * random.uniform(0.8, 1.2))
-        driver.execute_script(f"window.scrollBy(0, {dy});")
+        _dispatch_wheel(driver, dy)
         time.sleep(random.uniform(0.05, 0.2))
 
 
@@ -878,7 +1135,7 @@ def _export_and_confirm(driver, run_index: int) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Run bot against TicketMonarch")
     parser.add_argument("--runs", type=int, default=3, help="Number of bot sessions")
-    parser.add_argument("--type", choices=["linear", "scripted", "replay"], default="scripted")
+    parser.add_argument("--type", choices=["linear", "scripted", "replay", "tabber", "slow", "erratic", "speedrun", "mixed"], default="scripted")
     parser.add_argument("--replay-source", type=str, help="JSON file for replay bot")
     parser.add_argument("--pause-between", type=float, default=2.0, help="Seconds between runs")
     args = parser.parse_args()
@@ -899,15 +1156,28 @@ def main():
             print(f"{'='*50}")
 
             try:
-                if args.type == "linear":
+                bot_type = args.type
+                if bot_type == "mixed":
+                    bot_type = random.choice(["linear", "scripted", "tabber", "slow", "erratic", "speedrun"])
+                    print(f"  Mixed mode → {bot_type}")
+
+                if bot_type == "linear":
                     linear_bot(driver)
-                elif args.type == "scripted":
+                elif bot_type == "scripted":
                     scripted_bot(driver)
-                elif args.type == "replay":
+                elif bot_type == "replay":
                     if not args.replay_source:
                         print("Error: --replay-source required for replay bot")
                         return
                     replay_bot(driver, args.replay_source)
+                elif bot_type == "tabber":
+                    tabber_bot(driver)
+                elif bot_type == "slow":
+                    slow_bot(driver)
+                elif bot_type == "erratic":
+                    erratic_bot(driver)
+                elif bot_type == "speedrun":
+                    speedrun_bot(driver)
                 print(f"  Run {i + 1} complete.")
             except Exception as e:
                 print(f"  Run {i + 1} failed: {e}")

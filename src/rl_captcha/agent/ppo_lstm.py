@@ -7,6 +7,7 @@ multiple epochs of clipped surrogate updates over episode segments
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
 from typing import Tuple
 
@@ -26,7 +27,7 @@ class PPOLSTM:
 
     def __init__(
         self,
-        obs_dim: int = 13,
+        obs_dim: int = 26,
         action_dim: int = 7,
         config: PPOConfig | None = None,
         device: str = "auto",
@@ -86,6 +87,7 @@ class PPOLSTM:
         Returns:
             (action, log_prob, value)
         """
+        self.network.eval()
         with torch.no_grad():
             obs_t = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
             h, c = self.get_hidden()
@@ -108,15 +110,18 @@ class PPOLSTM:
 
             self._hidden = new_hidden
 
+        self.network.train()
         return int(action.item()), float(log_prob.item()), float(value.item())
 
     def get_value(self, obs: np.ndarray) -> float:
         """Estimate V(s) for the current observation (for GAE bootstrap)."""
+        self.network.eval()
         with torch.no_grad():
             obs_t = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
             h, c = self.get_hidden()
             _, values, _ = self.network(obs_t, (h, c))
-            return float(values.squeeze(-1).item())
+        self.network.train()
+        return float(values.squeeze(-1).item())
 
     # ── PPO update ──────────────────────────────────────────────────
 
@@ -142,6 +147,7 @@ class PPOLSTM:
         num_updates = 0
 
         for _epoch in range(cfg.num_epochs):
+            random.shuffle(segments)
             for seg in segments:
                 obs = seg["obs"].to(self.device)            # (T, obs_dim)
                 actions = seg["actions"].to(self.device)     # (T,)
@@ -152,10 +158,6 @@ class PPOLSTM:
 
                 h0 = seg["h0"].to(self.device)  # (num_layers, 1, hidden)
                 c0 = seg["c0"].to(self.device)
-
-                # Normalize advantages within segment
-                if len(advantages) > 1:
-                    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
                 # Forward pass: process entire segment sequentially
                 # obs shape: (T, obs_dim) → add batch dim → (1, T, obs_dim)
@@ -184,8 +186,14 @@ class PPOLSTM:
                 surr2 = torch.clamp(ratio, 1.0 - cfg.clip_eps, 1.0 + cfg.clip_eps) * advantages
                 policy_loss = -torch.min(surr1, surr2).mean()
 
-                # Value loss
-                value_loss = F.mse_loss(values, returns)
+                # Clipped value loss (prevents large value function swings)
+                old_values = seg["old_values"].to(self.device)
+                v_clipped = old_values + torch.clamp(
+                    values - old_values, -cfg.clip_eps, cfg.clip_eps
+                )
+                vl_unclipped = (values - returns) ** 2
+                vl_clipped = (v_clipped - returns) ** 2
+                value_loss = 0.5 * torch.max(vl_unclipped, vl_clipped).mean()
 
                 # Total loss
                 loss = (

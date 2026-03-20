@@ -10,6 +10,7 @@ segment sequentially.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -21,7 +22,7 @@ class RolloutBuffer:
     """Fixed-capacity on-policy buffer for PPO + LSTM."""
 
     capacity: int = 2048
-    obs_dim: int = 13
+    obs_dim: int = 26
     action_dim: int = 7
 
     # Transition arrays (allocated in __post_init__)
@@ -78,6 +79,9 @@ class RolloutBuffer:
         action_mask: np.ndarray | None = None,
     ):
         """Store one transition."""
+        if self.ptr >= self.capacity:
+            warnings.warn(f"RolloutBuffer overflow: ptr={self.ptr} >= capacity={self.capacity}, dropping transition")
+            return
         self.observations[self.ptr] = obs
         self.actions[self.ptr] = action
         if action_mask is not None:
@@ -111,6 +115,11 @@ class RolloutBuffer:
 
         self.returns[:n] = self.advantages[:n] + self.values[:n]
 
+        # Normalize advantages across entire rollout (not per-segment)
+        adv = self.advantages[:n]
+        if n > 1:
+            self.advantages[:n] = (adv - adv.mean()) / (adv.std() + 1e-8)
+
     def get_episode_segments(self) -> list[dict]:
         """Return data grouped by episode for sequential LSTM processing.
 
@@ -134,6 +143,7 @@ class RolloutBuffer:
                 "actions": torch.from_numpy(self.actions[start_idx:end_idx].copy()),
                 "action_masks": torch.from_numpy(self.action_masks[start_idx:end_idx].copy()),
                 "old_log_probs": torch.from_numpy(self.log_probs[start_idx:end_idx].copy()),
+                "old_values": torch.from_numpy(self.values[start_idx:end_idx].copy()),
                 "advantages": torch.from_numpy(self.advantages[start_idx:end_idx].copy()),
                 "returns": torch.from_numpy(self.returns[start_idx:end_idx].copy()),
                 "h0": h0,

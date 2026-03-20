@@ -410,11 +410,19 @@ class EventEnv(gym.Env):
         # Split timeline into overlapping windows
         ws = self.config.window_size
         stride = ws // 2  # 50% overlap for smoother transitions
-        self._windows = []
+        all_windows = []
         for start in range(0, len(timeline), stride):
             window = timeline[start:start + ws]
             if len(window) >= self.config.min_events:
-                self._windows.append(window)
+                all_windows.append(window)
+
+        # Subsample to max_windows (evenly spaced) so LSTM sees manageable sequences
+        max_w = self.config.max_windows
+        if len(all_windows) > max_w:
+            indices = np.linspace(0, len(all_windows) - 1, max_w, dtype=int)
+            self._windows = [all_windows[i] for i in indices]
+        else:
+            self._windows = all_windows
 
         info = {
             "session_id": session.session_id,
@@ -481,16 +489,21 @@ class EventEnv(gym.Env):
             terminated = True
             human_pass, bot_pass = cfg.puzzle_pass_rates[action]
             if true_label == 1:
-                reward = cfg.penalty_false_positive * (1.0 - human_pass)
-                outcome = "fp_puzzle"
+                # Human gets puzzled — UX friction cost, worse penalty if they fail
+                if random.random() < human_pass:
+                    reward = -cfg.action_costs[action]  # minor UX friction only
+                    outcome = "human_passed_puzzle"
+                else:
+                    reward = cfg.penalty_false_positive  # human failed = false positive
+                    outcome = "fp_puzzle"
             else:
+                # Bot gets puzzled — no cost, bot deserved the challenge
                 if random.random() < bot_pass:
-                    reward = cfg.penalty_false_negative * 0.5
+                    reward = cfg.penalty_false_negative * 0.5  # bot slipped through
                     outcome = "bot_passed_puzzle"
                 else:
-                    reward = cfg.reward_correct_block
+                    reward = cfg.reward_correct_block  # caught the bot, full reward
                     outcome = "bot_blocked_puzzle"
-            reward -= cfg.action_costs[action]
 
         elif action == 5:  # allow — terminal
             terminated = True

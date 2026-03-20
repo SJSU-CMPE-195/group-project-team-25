@@ -53,15 +53,16 @@ class EventEnvConfig:
 
     # Session limits
     min_events: int = 10              # skip sessions with fewer events
+    max_windows: int = 50             # cap windows per episode (subsample if longer)
 
-    # Action costs
+    # Action costs (higher = worse UX friction for users)
     action_costs: list[float] = field(
         default_factory=lambda: [
             0.0,    # continue
             0.01,   # deploy_honeypot
-            0.1,    # easy_puzzle
-            0.3,    # medium_puzzle
-            0.5,    # hard_puzzle
+            0.10,   # easy_puzzle   — minor friction
+            0.30,   # medium_puzzle — noticeable friction
+            0.50,   # hard_puzzle   — major friction
             0.0,    # allow
             0.0,    # block
         ]
@@ -114,15 +115,15 @@ class PPOConfig:
     gae_lambda: float = 0.95
     clip_eps: float = 0.2
     value_loss_coeff: float = 0.5
-    entropy_coeff: float = 0.01
+    entropy_coeff: float = 0.005
     max_grad_norm: float = 0.5
 
     # LSTM
-    lstm_hidden_size: int = 256
-    lstm_num_layers: int = 2
+    lstm_hidden_size: int = 128
+    lstm_num_layers: int = 1
 
     # Rollout
-    rollout_steps: int = 2048
+    rollout_steps: int = 4096
     num_epochs: int = 4
 
     # Training

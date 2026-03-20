@@ -3,7 +3,6 @@ from typing import Tuple, Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 # inherit from nn.module (it is a pytorch neural network module)
 class LSTMActorCritic(nn.Module):
@@ -11,7 +10,7 @@ class LSTMActorCritic(nn.Module):
    # building the neural network parts
     def __init__(
         self,
-        input_dim: int = 13,
+        input_dim: int = 26,
         hidden_size: int = 128,
         num_layers: int = 1,
         action_dim: int = 7,
@@ -83,24 +82,3 @@ class LSTMActorCritic(nn.Module):
 
         return logits, values, new_hidden
     
-    # softmax logits -> probablities + entropy + values
-    def get_action_and_value(
-        self,
-        x: torch.Tensor,
-        hidden: Tuple[torch.Tensor, torch.Tensor],
-        action: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        
-        logits, values, new_hidden = self.forward(x, hidden)
-
-        probs = F.softmax(logits, dim=-1)
-        dist = torch.distributions.Categorical(probs)
-
-        if action is None:
-            action = dist.sample()
-
-        log_prob = dist.log_prob(action)
-        entropy = dist.entropy()
-        value = values.squeeze(-1)
-
-        return action, log_prob, entropy, value, new_hidden
