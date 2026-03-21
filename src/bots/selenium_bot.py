@@ -696,6 +696,10 @@ def _fill_checkout(driver, type_fn, move_fn, skip_honeypot=False):
     except Exception as e:
         print(f"  WARNING: Could not select state: {e}")
 
+    # Capture session ID BEFORE clicking Purchase — the Confirmation page
+    # calls resetSession() which replaces it with a new UUID immediately.
+    captured_sid = _get_session_id(driver)
+
     # Click Purchase
     try:
         purchase = wait_for(driver, ".purchase-button", timeout=5)
@@ -709,6 +713,8 @@ def _fill_checkout(driver, type_fn, move_fn, skip_honeypot=False):
     except Exception:
         # Check if a challenge appeared
         _handle_challenge(driver, move_fn)
+
+    return captured_sid
 
 
 # ---------------------------------------------------------------------------
@@ -730,7 +736,7 @@ def linear_bot(driver, skip_honeypot=False):
         return
     _idle_fidget(driver, random.uniform(0.3, 0.8))
 
-    _fill_checkout(driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout(driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot)
 
 
 def scripted_bot(driver, skip_honeypot=False):
@@ -758,7 +764,7 @@ def scripted_bot(driver, skip_honeypot=False):
     _page_sweep(driver)
     _idle_fidget(driver, random.uniform(0.5, 1.5))
 
-    _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
 
 
 def tabber_bot(driver, skip_honeypot=False):
@@ -803,7 +809,7 @@ def tabber_bot(driver, skip_honeypot=False):
             return
 
     time.sleep(random.uniform(0.5, 1.0))
-    _fill_checkout(driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout(driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot)
 
 
 def slow_bot(driver, skip_honeypot=False):
@@ -826,7 +832,7 @@ def slow_bot(driver, skip_honeypot=False):
         return
     time.sleep(random.uniform(5.0, 8.0))
 
-    _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
 
 
 def erratic_bot(driver, skip_honeypot=False):
@@ -866,7 +872,7 @@ def erratic_bot(driver, skip_honeypot=False):
         return
 
     # Erratic checkout — fidget excessively between fields
-    _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
 
 
 def speedrun_bot(driver, skip_honeypot=False):
@@ -948,6 +954,9 @@ def speedrun_bot(driver, skip_honeypot=False):
     except Exception:
         pass
 
+    # Capture session ID before Purchase (Confirmation resets it)
+    captured_sid = _get_session_id(driver)
+
     try:
         purchase = wait_for(driver, ".purchase-button", timeout=5)
         purchase.click()
@@ -958,6 +967,8 @@ def speedrun_bot(driver, skip_honeypot=False):
         wait_for_url(driver, "/confirmation", timeout=5)
     except Exception:
         _handle_challenge(driver, _linear_move_and_click)
+
+    return captured_sid
 
 
 def replay_bot(driver, source_path: str, skip_honeypot=False):
@@ -996,7 +1007,7 @@ def replay_bot(driver, source_path: str, skip_honeypot=False):
     _replay_scroll(driver, seg.get("scroll", []), max_events=5)
     time.sleep(random.uniform(0.2, 0.5))
 
-    _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
 
 
 # ---------------------------------------------------------------------------
@@ -1104,7 +1115,7 @@ def _get_session_id(driver) -> str | None:
         return None
 
 
-def _export_and_confirm(driver, run_index: int) -> None:
+def _export_and_confirm(driver, run_index: int, session_id: str | None = None) -> None:
     """Pull telemetry from backend, save to data/bot/, confirm as bot."""
     import urllib.request
 
@@ -1112,7 +1123,9 @@ def _export_and_confirm(driver, run_index: int) -> None:
     print("  Waiting for telemetry flush...")
     time.sleep(8)
 
-    session_id = _get_session_id(driver)
+    # Use pre-captured session ID if available (Confirmation page resets it)
+    if not session_id:
+        session_id = _get_session_id(driver)
     if not session_id:
         print("  WARNING: Could not get session ID from browser")
         return
@@ -1223,32 +1236,37 @@ def main():
                     print(f"  Mixed mode → {bot_type}")
 
                 skip = args.skip_honeypot
+                captured_sid = None
                 if bot_type == "linear":
-                    linear_bot(driver, skip_honeypot=skip)
+                    captured_sid = linear_bot(driver, skip_honeypot=skip)
                 elif bot_type == "scripted":
-                    scripted_bot(driver, skip_honeypot=skip)
+                    captured_sid = scripted_bot(driver, skip_honeypot=skip)
                 elif bot_type == "replay":
                     if not args.replay_source:
                         print("Error: --replay-source required for replay bot")
                         return
-                    replay_bot(driver, args.replay_source, skip_honeypot=skip)
+                    captured_sid = replay_bot(driver, args.replay_source, skip_honeypot=skip)
                 elif bot_type == "tabber":
-                    tabber_bot(driver, skip_honeypot=skip)
+                    captured_sid = tabber_bot(driver, skip_honeypot=skip)
                 elif bot_type == "slow":
-                    slow_bot(driver, skip_honeypot=skip)
+                    captured_sid = slow_bot(driver, skip_honeypot=skip)
                 elif bot_type == "erratic":
-                    erratic_bot(driver, skip_honeypot=skip)
+                    captured_sid = erratic_bot(driver, skip_honeypot=skip)
                 elif bot_type == "speedrun":
-                    speedrun_bot(driver, skip_honeypot=skip)
-                run_succeeded = True
-                print(f"  Run {i + 1} complete.")
+                    captured_sid = speedrun_bot(driver, skip_honeypot=skip)
+                run_succeeded = captured_sid is not None
+                if run_succeeded:
+                    print(f"  Run {i + 1} complete.")
+                else:
+                    print(f"  Run {i + 1} did not reach checkout.")
             except Exception as e:
                 run_succeeded = False
+                captured_sid = None
                 print(f"  Run {i + 1} failed: {e}")
 
             # Auto-export telemetry and confirm as bot (skip if run failed)
             if run_succeeded:
-                _export_and_confirm(driver, i + 1)
+                _export_and_confirm(driver, i + 1, session_id=captured_sid)
             else:
                 print("  Skipping export — run did not complete successfully")
 
