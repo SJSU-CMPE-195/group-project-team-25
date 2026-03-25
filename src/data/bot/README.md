@@ -9,10 +9,10 @@ Automated bot browsing sessions. Treated as **label=0 (bot)** by the training pi
 ### Selenium Bots
 
 ```bash
-python bots/selenium_bot.py --runs 5 --type scripted
+python -m bots.selenium_bot --runs 50 --type mixed --skip-honeypot
 ```
 
-The bot auto-exports telemetry from the backend API after each run and saves JSON files here automatically. No Chrome extension is required for the Selenium bot because `tracking.js` captures everything.
+The bot auto-exports telemetry from the backend API after each run and saves JSON files here automatically. `tracking.js` captures everything in the browser.
 
 ### LLM Bot
 
@@ -26,21 +26,22 @@ See `bots/README.md` for full setup and options.
 
 ## JSON Format
 
-Files from the Chrome extension use the same format as human data — session objects keyed by UUID with segments containing mouse, clicks, keystrokes, and scroll arrays.
+Sessions use the live-confirm format with segments at the top level:
 
 ```json
 {
-  "<session_id>": {
-    "sessionId": "...",
-    "segments": [
-      {
-        "mouse": [...],
-        "clicks": [...],
-        "keystrokes": [...],
-        "scroll": [...]
-      }
-    ]
-  }
+  "sessionId": "...",
+  "label": 0,
+  "bot_type": "scripted",
+  "tier": 2,
+  "segments": [
+    {
+      "mouse": [...],
+      "clicks": [...],
+      "keystrokes": [...],
+      "scroll": [...]
+    }
+  ]
 }
 ```
 

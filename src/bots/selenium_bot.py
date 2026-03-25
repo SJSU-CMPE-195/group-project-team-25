@@ -14,7 +14,7 @@ Usage:
     pip install selenium webdriver-manager
     python bots/selenium_bot.py --runs 5 --type linear
     python bots/selenium_bot.py --runs 5 --type scripted
-    python bots/selenium_bot.py --runs 3 --type replay --replay-source data/human/telemetry_export.json
+    python bots/selenium_bot.py --runs 3 --type replay --replay-source data/human/session_example.json
 """
 
 from __future__ import annotations
@@ -41,6 +41,13 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 SITE_URL = "http://localhost:3000"
 API_URL = "http://localhost:5000"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "bot"
+
+# Bot type → adversarial tier (must match rl_captcha.data.loader.BOT_TYPE_TO_TIER)
+BOT_TIER: dict[str, int] = {
+    "linear": 1, "tabber": 1, "speedrun": 1,
+    "scripted": 2, "stealth": 2, "slow": 2, "erratic": 2, "replay": 2,
+    "semi_auto": 3, "trace_conditioned": 4,
+}
 
 # Realistic fake identities for varied runs
 FAKE_PEOPLE = [
@@ -273,12 +280,37 @@ def _human_move_and_click(driver, element, click_only=False):
 
 
 def _linear_move_and_click(driver, element, click_only=False):
-    """Straight-line move + click with slight timing variance."""
-    # Occasional pre-click hover
-    if random.random() < 0.10:
-        ActionChains(driver).move_to_element(element).perform()
-        time.sleep(random.uniform(0.1, 0.3))
-    ActionChains(driver).move_to_element(element).click().perform()
+    """Straight-line move + click with intermediate mouse events.
+
+    Instead of teleporting (which produces zero mouse speed/accel in
+    telemetry), we step toward the target with small offsets so that
+    tracking.js actually captures mouse movement.
+    """
+    if click_only:
+        ActionChains(driver).move_to_element(element).click().perform()
+        time.sleep(random.uniform(0.05, 0.15))
+        return
+
+    steps = random.randint(6, 14)
+    actions = ActionChains(driver)
+
+    # Move toward target in steps: start offset far from element, converge
+    for i in range(steps):
+        remaining = steps - i - 1
+        # Offsets shrink to zero as we approach the element
+        off_x = int(remaining * random.uniform(-8, 8))
+        off_y = int(remaining * random.uniform(-5, 5))
+        actions.move_to_element_with_offset(element, off_x, off_y)
+        # Uniform-ish speed (slightly robotic but generates real events)
+        actions.pause(random.uniform(0.015, 0.04))
+
+    actions.move_to_element(element)
+    actions.click()
+    try:
+        actions.perform()
+    except Exception:
+        # Fallback: direct click
+        ActionChains(driver).move_to_element(element).click().perform()
     time.sleep(random.uniform(0.05, 0.2))
 
 
@@ -481,13 +513,28 @@ def _random_page_click(driver, count=1):
     Bot interactive_click ratio is 0.875 vs human 0.490, meaning bots only
     click on buttons/inputs. These random clicks dilute that ratio.
     """
+    # Target safe non-interactive elements to avoid accidentally clicking
+    # stepper buttons, disabled buttons, or form controls.
+    safe_selectors = [
+        "h1", "h2", "h3", "p", "header", ".logo",
+        ".ss-panel-header", ".ss-legend", ".ss-event-bar",
+        ".ss-stadium-note", ".ss-stage",
+    ]
     for _ in range(count):
         try:
-            # Click on page body at random coordinates
-            body = driver.find_element(By.TAG_NAME, "body")
-            x_off = random.randint(-400, 400)
-            y_off = random.randint(-200, 200)
-            ActionChains(driver).move_to_element_with_offset(body, x_off, y_off).click().perform()
+            # Try to click a known safe element first
+            safe_targets = []
+            for sel in safe_selectors:
+                safe_targets.extend(driver.find_elements(By.CSS_SELECTOR, sel))
+            if safe_targets:
+                target = random.choice(safe_targets)
+                ActionChains(driver).move_to_element(target).click().perform()
+            else:
+                # Fallback: click on body at random coordinates
+                body = driver.find_element(By.TAG_NAME, "body")
+                x_off = random.randint(-400, 400)
+                y_off = random.randint(-200, 200)
+                ActionChains(driver).move_to_element_with_offset(body, x_off, y_off).click().perform()
             time.sleep(random.uniform(0.1, 0.3))
         except Exception:
             pass
@@ -578,8 +625,9 @@ def _pick_section(driver, move_fn):
     """Select tickets on the seat selection page, then click Checkout.
 
     The UI uses a stadium grid with stepper buttons (+/-) per section.
-    We pick 1-3 random sections and add 1-4 tickets each, then click
-    the checkout button.
+    Mimics human behavior: browse sections visually, pick 1-2 sections,
+    add tickets with natural pauses. Sometimes change mind (add then remove).
+    Never clicks minus on a section with 0 tickets.
     """
     wait_for(driver, ".ss-section-cell", timeout=10)
     cells = driver.find_elements(By.CSS_SELECTOR, ".ss-section-cell")
@@ -587,26 +635,60 @@ def _pick_section(driver, move_fn):
         print("  WARNING: No .ss-section-cell found")
         return False
 
-    # Pick 1-3 random sections
-    num_sections = min(random.randint(1, 3), len(cells))
+    # --- Browse phase: hover over a few sections like a human scanning ---
+    browse_count = random.randint(1, 4)
+    browse_targets = random.sample(cells, min(browse_count, len(cells)))
+    for cell in browse_targets:
+        try:
+            ActionChains(driver).move_to_element(cell).perform()
+            time.sleep(random.uniform(0.2, 0.6))
+        except Exception:
+            pass
+
+    # --- Selection phase: pick 1-2 sections (rarely 3) ---
+    num_sections = random.choices([1, 2, 3], weights=[0.45, 0.45, 0.10])[0]
+    num_sections = min(num_sections, len(cells))
     chosen = random.sample(cells, num_sections)
+
+    sections_with_tickets = []  # track which cells we added tickets to
 
     for cell in chosen:
         try:
-            # The "+" button is the second .ss-step-btn inside the cell
-            plus_buttons = cell.find_elements(By.CSS_SELECTOR, ".ss-step-btn")
-            if len(plus_buttons) < 2:
+            btns = cell.find_elements(By.CSS_SELECTOR, ".ss-step-btn")
+            if len(btns) < 2:
                 continue
-            plus_btn = plus_buttons[1]  # [0]=minus, [1]=plus
+            minus_btn, plus_btn = btns[0], btns[1]
 
-            # Click + between 1 and 4 times to add tickets
-            num_tickets = random.randint(1, 4)
-            for _ in range(num_tickets):
+            # Add 1-4 tickets (weighted toward 1-2 like a real person)
+            num_tickets = random.choices([1, 2, 3, 4], weights=[0.35, 0.35, 0.20, 0.10])[0]
+            for i in range(num_tickets):
                 move_fn(driver, plus_btn)
-                time.sleep(random.uniform(0.15, 0.4))
+                # Slightly longer pause on first click (deciding), shorter after
+                if i == 0:
+                    time.sleep(random.uniform(0.3, 0.7))
+                else:
+                    time.sleep(random.uniform(0.12, 0.35))
+
+            sections_with_tickets.append((cell, minus_btn, num_tickets))
+
+            # Small pause between sections
+            time.sleep(random.uniform(0.3, 0.8))
+
         except StaleElementReferenceException:
             print("  WARNING: Stale element in seat selection, skipping section")
             continue
+
+    # --- Occasionally change mind: remove tickets from one section ---
+    if len(sections_with_tickets) > 1 and random.random() < 0.15:
+        # Remove from a random section (only click minus if qty > 0)
+        remove_cell, minus_btn, qty = random.choice(sections_with_tickets)
+        try:
+            remove_count = random.randint(1, qty)
+            for _ in range(remove_count):
+                move_fn(driver, minus_btn)
+                time.sleep(random.uniform(0.15, 0.35))
+        except Exception:
+            pass
 
     # Click the checkout button
     try:
@@ -874,6 +956,124 @@ def _fill_checkout(driver, type_fn, move_fn, skip_honeypot=False):
     return captured_sid
 
 
+def _fill_checkout_targeted(driver, type_fn, move_fn, skip_honeypot=False):
+    """Fill checkout by targeting known fields by ID — like a human would.
+
+    Unlike _fill_checkout which sweeps querySelectorAll and fills every input
+    (a telltale bot pattern), this fills only the fields a human would see
+    and interact with, in a natural top-to-bottom order with occasional
+    skips/revisits.
+    """
+    form = get_form_data()
+    wait_for(driver, "#card_number", timeout=10)
+
+    # Fields in visual order (as a human would see them on the page)
+    field_order = [
+        ("full_name", form["full_name"]),
+        ("billing_address", form["billing_address"]),
+        ("apartment", form["apartment"]),
+        ("city", form["city"]),
+        ("zip_code", form["zip_code"]),
+        ("card_number", form["card_number"]),
+        ("card_expiry", form["card_expiry"]),
+        ("card_cvv", form["card_cvv"]),
+    ]
+
+    # Track all known checkout field IDs (including ones we skip)
+    # so the honeypot pass doesn't accidentally fill them with garbage.
+    all_known_ids = {fid for fid, _ in field_order}
+
+    # Occasionally skip apartment (humans often leave it blank)
+    if not form["apartment"] or random.random() < 0.3:
+        field_order = [(fid, val) for fid, val in field_order if fid != "apartment"]
+
+    # Occasionally fill out of order (human glances at card first, etc.)
+    if random.random() < 0.25:
+        # Move card fields to the front
+        card_fields = [(f, v) for f, v in field_order if f.startswith("card_")]
+        other_fields = [(f, v) for f, v in field_order if not f.startswith("card_")]
+        field_order = card_fields + other_fields
+
+    for field_id, value in field_order:
+        if not value:
+            continue
+        try:
+            inp = driver.find_element(By.ID, field_id)
+            if not inp.is_displayed():
+                continue  # skip hidden fields naturally
+            move_fn(driver, inp, click_only=True)
+            type_fn(inp, value)
+
+            # Human-like pauses between fields
+            if random.random() < 0.4:
+                _idle_fidget(driver, random.uniform(0.3, 1.0))
+            else:
+                time.sleep(random.uniform(0.2, 0.6))
+        except Exception:
+            pass
+
+    # If NOT skipping honeypot, also fill any unknown visible fields
+    # (dumb bots still fill everything they find)
+    if not skip_honeypot:
+        all_inputs = driver.find_elements(By.CSS_SELECTOR,
+            "input[type='text'], input[type='tel'], input[type='email'], input:not([type])")
+        GENERIC_FILLERS = [
+            "test@email.com", "5551234567", "John Doe", "123 Main St",
+            "Springfield", "12345", "some value",
+        ]
+        filler_idx = 0
+        for inp in all_inputs:
+            try:
+                fid = inp.get_attribute("id") or inp.get_attribute("name") or ""
+                if not fid or fid in all_known_ids:
+                    continue
+                value = GENERIC_FILLERS[filler_idx % len(GENERIC_FILLERS)]
+                filler_idx += 1
+                if inp.is_displayed():
+                    move_fn(driver, inp, click_only=True)
+                    type_fn(inp, value)
+                else:
+                    # Hidden field — fill via JS (honeypot trap)
+                    driver.execute_script("""
+                        var el = arguments[0], value = arguments[1];
+                        var setter = Object.getOwnPropertyDescriptor(
+                            window.HTMLInputElement.prototype, 'value').set;
+                        setter.call(el, value);
+                        el.dispatchEvent(new Event('input', {bubbles: true}));
+                        el.dispatchEvent(new Event('change', {bubbles: true}));
+                    """, inp, value)
+                time.sleep(random.uniform(0.1, 0.3))
+            except Exception:
+                pass
+
+    # Select state dropdown
+    try:
+        state_el = driver.find_element(By.ID, "state")
+        move_fn(driver, state_el, click_only=True)
+        select = Select(state_el)
+        select.select_by_visible_text(form["state"])
+        time.sleep(random.uniform(0.3, 0.6))
+    except Exception as e:
+        print(f"  WARNING: Could not select state: {e}")
+
+    # Capture session ID BEFORE clicking Purchase
+    captured_sid = _get_session_id(driver)
+
+    # Click Purchase
+    try:
+        purchase = wait_for(driver, ".purchase-button", timeout=5)
+        move_fn(driver, purchase)
+    except Exception as e:
+        print(f"  WARNING: Could not click Purchase: {e}")
+
+    try:
+        wait_for_url(driver, "/confirmation", timeout=5)
+    except Exception:
+        _handle_challenge(driver, move_fn)
+
+    return captured_sid
+
+
 # ---------------------------------------------------------------------------
 # Bot behaviors
 # ---------------------------------------------------------------------------
@@ -882,17 +1082,22 @@ def linear_bot(driver, skip_honeypot=False):
     """Straight-line mouse, uniform typing with slight variance.
     Obviously robotic — easy negative for the RL agent."""
     _go_home(driver)
+    _wander_mouse(driver, random.uniform(0.5, 1.0))
+    _random_page_click(driver, random.randint(0, 1))
     _random_scroll(driver, scrolls=random.randint(1, 2))
-    time.sleep(random.uniform(0.3, 0.8))
+    time.sleep(random.uniform(0.2, 0.5))
 
     if not _pick_concert(driver, _linear_move_and_click):
         return
+    _wander_mouse(driver, random.uniform(0.3, 0.8))
     _random_scroll(driver, scrolls=1)
-    time.sleep(random.uniform(0.3, 0.5))
+    time.sleep(random.uniform(0.2, 0.4))
 
     if not _pick_section(driver, _linear_move_and_click):
         return
-    time.sleep(random.uniform(0.2, 0.5))
+    _wander_mouse(driver, random.uniform(0.2, 0.5))
+    _random_page_click(driver, random.randint(0, 1))
+    time.sleep(random.uniform(0.1, 0.3))
 
     return _fill_checkout(driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot)
 
@@ -901,41 +1106,44 @@ def scripted_bot(driver, skip_honeypot=False):
     """Bezier curve mouse, human-like typing with key hold, scrolling. More sophisticated."""
     _go_home(driver)
     _wander_mouse(driver, random.uniform(0.8, 1.5))
-    _random_page_click(driver, random.randint(0, 1))
+    _random_page_click(driver, random.randint(1, 2))
 
     # Browse around first
     _human_scroll(driver, scrolls=random.randint(2, 4))
-    _idle_fidget(driver, random.uniform(0.5, 1.5))
+    _idle_fidget(driver, random.uniform(0.3, 0.8))
 
     if not _pick_concert(driver, _human_move_and_click):
         return
     _wander_mouse(driver, random.uniform(0.5, 1.0))
-    _random_page_click(driver, random.randint(0, 1))
+    _random_page_click(driver, random.randint(1, 2))
 
     # Look at seats
     _human_scroll(driver, scrolls=random.randint(1, 3))
-    _idle_fidget(driver, random.uniform(0.5, 1.0))
+    _idle_fidget(driver, random.uniform(0.3, 0.8))
 
     if not _pick_section(driver, _human_move_and_click):
         return
     _wander_mouse(driver, random.uniform(0.3, 0.8))
+    _random_page_click(driver, random.randint(0, 1))
     _human_scroll(driver, scrolls=1)
 
     # Use key-hold typing for ~50% of scripted bots
     if random.random() < 0.5:
         def _type_scripted(element, text):
             _type_with_hold(driver, element, text)
-        return _fill_checkout(driver, _type_scripted, _human_move_and_click, skip_honeypot=skip_honeypot)
+        return _fill_checkout_targeted(driver, _type_scripted, _human_move_and_click, skip_honeypot=skip_honeypot)
 
-    return _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout_targeted(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
 
 
 def tabber_bot(driver, skip_honeypot=False):
     """Keyboard-only bot — navigates entirely via Tab/Enter, no mouse at all.
     Easy to detect: zero mouse events, perfectly regular key timing."""
     _go_home(driver)
+    # Even keyboard users move mouse a bit while reading
+    _wander_mouse(driver, random.uniform(0.3, 0.8))
     _random_scroll(driver, scrolls=1)
-    time.sleep(random.uniform(1.0, 2.0))
+    time.sleep(random.uniform(0.5, 1.0))
 
     # Tab to a tickets button and press Enter
     body = driver.find_element(By.TAG_NAME, "body")
@@ -980,23 +1188,28 @@ def slow_bot(driver, skip_honeypot=False):
     """Slow methodical bot — moderate pauses between actions, very regular.
     Mimics a careful person but timing is unnaturally consistent."""
     _go_home(driver)
-    time.sleep(random.uniform(1.5, 3.0))
+    _wander_mouse(driver, random.uniform(0.8, 1.5))
+    _random_page_click(driver, random.randint(0, 1))
+    time.sleep(random.uniform(0.5, 1.0))
 
     _human_scroll(driver, scrolls=1)
-    time.sleep(random.uniform(1.5, 2.5))
+    time.sleep(random.uniform(0.5, 1.0))
 
     if not _pick_concert(driver, _human_move_and_click):
         return
-    time.sleep(random.uniform(1.5, 3.0))
+    _wander_mouse(driver, random.uniform(0.5, 1.0))
+    time.sleep(random.uniform(0.5, 1.0))
 
     _human_scroll(driver, scrolls=1)
-    time.sleep(random.uniform(1.0, 2.0))
+    _random_page_click(driver, random.randint(0, 1))
+    time.sleep(random.uniform(0.5, 1.0))
 
     if not _pick_section(driver, _human_move_and_click):
         return
-    time.sleep(random.uniform(1.5, 2.5))
+    _wander_mouse(driver, random.uniform(0.3, 0.8))
+    time.sleep(random.uniform(0.5, 1.0))
 
-    return _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout_targeted(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
 
 
 def erratic_bot(driver, skip_honeypot=False):
@@ -1028,6 +1241,7 @@ def erratic_bot(driver, skip_honeypot=False):
         return
 
     # More thrashing on seats page
+    _random_page_click(driver, random.randint(1, 3))
     for _ in range(random.randint(2, 4)):
         _page_sweep(driver)
         time.sleep(random.uniform(0.1, 0.3))
@@ -1036,7 +1250,8 @@ def erratic_bot(driver, skip_honeypot=False):
         return
 
     # Erratic checkout — fidget excessively between fields
-    return _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    _random_page_click(driver, random.randint(1, 2))
+    return _fill_checkout_targeted(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
 
 
 def speedrun_bot(driver, skip_honeypot=False):
@@ -1044,8 +1259,9 @@ def speedrun_bot(driver, skip_honeypot=False):
     Minimal mouse movement, instant typing, near-zero pauses.
     Very easy to detect: session duration is unnaturally short."""
     _go_home(driver)
+    _wander_mouse(driver, random.uniform(0.2, 0.5))
     _random_scroll(driver, scrolls=1)
-    time.sleep(0.3)
+    time.sleep(0.2)
 
     if not _pick_concert(driver, _linear_move_and_click):
         return
@@ -1143,8 +1359,11 @@ def speedrun_bot(driver, skip_honeypot=False):
 HUMAN_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "human"
 
 
+_cached_human_profiles: list[dict] | None = None
+
+
 def _load_human_timing_profiles() -> list[dict]:
-    """Load human session data and extract timing profiles.
+    """Load human session data and extract timing profiles (cached after first call).
 
     Returns a list of timing profiles, each containing:
     - mouse_intervals: list of inter-event gaps (ms) during mouse movement
@@ -1155,6 +1374,10 @@ def _load_human_timing_profiles() -> list[dict]:
     - duration: total session duration (ms)
     - event_counts: dict of event type counts
     """
+    global _cached_human_profiles
+    if _cached_human_profiles is not None:
+        return _cached_human_profiles
+
     profiles = []
     if not HUMAN_DATA_DIR.exists():
         return profiles
@@ -1248,6 +1471,7 @@ def _load_human_timing_profiles() -> list[dict]:
             },
         })
 
+    _cached_human_profiles = profiles
     return profiles
 
 
@@ -1299,7 +1523,6 @@ def stealth_bot(driver, skip_honeypot=False):
 
     # Continuous mouse movement while browsing (critical for mouse_spd/accel)
     _wander_mouse(driver, random.uniform(1.0, 2.0))
-    _random_page_click(driver, random.randint(1, 2))
     _human_scroll(driver, scrolls=random.randint(2, 4))
     _idle_fidget(driver, random.uniform(0.3, 0.8))
 
@@ -1315,13 +1538,12 @@ def stealth_bot(driver, skip_honeypot=False):
     # --- Page 2: Seat Selection ---
     _wander_mouse(driver, random.uniform(0.8, 1.5))
     _human_scroll(driver, scrolls=random.randint(1, 3))
-    _random_page_click(driver, random.randint(0, 2))
     _idle_fidget(driver, random.uniform(0.3, 0.8))
 
     if indecisive:
         _wander_mouse(driver, random.uniform(0.5, 1.2))
         _human_scroll(driver, scrolls=1)
-        _idle_fidget(driver, random.uniform(0.3, 1.0))
+        _random_page_click(driver, 1)
 
     if not _pick_section(driver, _human_move_and_click):
         return
@@ -1329,10 +1551,6 @@ def stealth_bot(driver, skip_honeypot=False):
     # --- Page 3: Checkout ---
     _wander_mouse(driver, random.uniform(0.5, 1.2))
     _human_scroll(driver, scrolls=random.randint(1, 2))
-
-    if indecisive:
-        _random_page_click(driver, 1)
-        _wander_mouse(driver, random.uniform(0.5, 1.0))
 
     # Typing with realistic key hold durations (JS keydown/sleep/keyup)
     think_prob = 0.12 if indecisive else 0.06
@@ -1357,8 +1575,8 @@ def stealth_bot(driver, skip_honeypot=False):
             _idle_fidget(driver_arg, random.uniform(0.1, 0.3))
         _human_move_and_click(driver_arg, element, click_only=click_only)
 
-    return _fill_checkout(driver, _type_stealth, _stealth_move_and_click,
-                          skip_honeypot=skip_honeypot)
+    return _fill_checkout_targeted(driver, _type_stealth, _stealth_move_and_click,
+                                   skip_honeypot=skip_honeypot)
 
 
 def replay_bot(driver, source_path: str, skip_honeypot=False):
@@ -1397,7 +1615,222 @@ def replay_bot(driver, source_path: str, skip_honeypot=False):
     _replay_scroll(driver, seg.get("scroll", []), max_events=5)
     time.sleep(random.uniform(0.2, 0.5))
 
-    return _fill_checkout(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout_targeted(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+
+
+def semi_auto_bot(driver, skip_honeypot=False):
+    """Tier 3 — Semi-automated: bot automates navigation, then pauses for
+    a simulated 'human operator' to complete checkout.
+
+    The idea is that a real attacker might script the browsing/seat-selection
+    but hand off to a human (or slower, more careful automation) at checkout.
+    This creates a session that looks automated early and human-like late,
+    making it harder to classify with a single global decision.
+
+    Randomly picks one of three handoff strategies:
+      A) Bot navigates → human does checkout  (most common)
+      B) Human browses → bot does checkout    (less common)
+      C) Bot navigates & selects → human fills payment only
+    """
+    strategy = random.choices(["bot_then_human", "human_then_bot", "split_checkout"],
+                              weights=[0.50, 0.25, 0.25])[0]
+    print(f"  Semi-auto strategy: {strategy}")
+
+    if strategy == "bot_then_human":
+        # ── BOT phase: fast, efficient navigation ──
+        _go_home(driver)
+        _wander_mouse(driver, random.uniform(0.3, 0.6))
+        _random_scroll(driver, scrolls=1)
+        time.sleep(random.uniform(0.2, 0.4))
+
+        if not _pick_concert(driver, _linear_move_and_click):
+            return
+        time.sleep(random.uniform(0.2, 0.5))
+
+        if not _pick_section(driver, _linear_move_and_click):
+            return
+
+        # ── HUMAN phase: slow, careful checkout ──
+        _wander_mouse(driver, random.uniform(0.8, 1.5))
+        _human_scroll(driver, scrolls=random.randint(1, 2))
+        _idle_fidget(driver, random.uniform(0.3, 0.8))
+
+        def _type_careful(element, text):
+            _type_with_hold(driver, element, text,
+                            hold_min=0.05, hold_max=0.15,
+                            think_prob=0.10, think_range=(0.3, 1.0))
+
+        return _fill_checkout_targeted(driver, _type_careful, _human_move_and_click,
+                                       skip_honeypot=skip_honeypot)
+
+    elif strategy == "human_then_bot":
+        # ── HUMAN phase: browsing and exploring ──
+        _go_home(driver)
+        _wander_mouse(driver, random.uniform(1.0, 2.0))
+        _human_scroll(driver, scrolls=random.randint(2, 4))
+        _idle_fidget(driver, random.uniform(0.5, 1.0))
+        _random_page_click(driver, random.randint(1, 2))
+
+        if not _pick_concert(driver, _human_move_and_click):
+            return
+
+        _wander_mouse(driver, random.uniform(0.8, 1.5))
+        _human_scroll(driver, scrolls=random.randint(1, 3))
+        _idle_fidget(driver, random.uniform(0.3, 0.8))
+
+        if not _pick_section(driver, _human_move_and_click):
+            return
+
+        # ── BOT phase: fast checkout ──
+        time.sleep(random.uniform(0.1, 0.3))
+        return _fill_checkout_targeted(driver, _type_uniform, _linear_move_and_click,
+                                       skip_honeypot=skip_honeypot)
+
+    else:  # split_checkout
+        # ── BOT phase: navigate + select ──
+        _go_home(driver)
+        _wander_mouse(driver, random.uniform(0.5, 1.0))
+        time.sleep(random.uniform(0.2, 0.4))
+
+        if not _pick_concert(driver, _human_move_and_click):
+            return
+
+        if not _pick_section(driver, _human_move_and_click):
+            return
+
+        # ── MIXED phase: bot fills address, human fills payment ──
+        _wander_mouse(driver, random.uniform(0.5, 1.0))
+
+        # We use targeted checkout but alternate typing style per field group
+        form = get_form_data()
+        wait_for(driver, "#card_number", timeout=10)
+
+        # Address fields — bot-like (fast uniform typing)
+        address_fields = [
+            ("full_name", form["full_name"]),
+            ("billing_address", form["billing_address"]),
+            ("city", form["city"]),
+            ("zip_code", form["zip_code"]),
+        ]
+        for fid, val in address_fields:
+            try:
+                el = driver.find_element(By.ID, fid)
+                _linear_move_and_click(driver, el)
+                _type_uniform(el, val)
+                time.sleep(random.uniform(0.05, 0.15))
+            except Exception:
+                pass
+
+        # Payment fields — human-like (hold typing, pauses)
+        _idle_fidget(driver, random.uniform(0.3, 0.8))
+        payment_fields = [
+            ("card_number", form["card_number"]),
+            ("card_expiry", form["card_expiry"]),
+            ("card_cvv", form["card_cvv"]),
+        ]
+        for fid, val in payment_fields:
+            try:
+                el = driver.find_element(By.ID, fid)
+                _human_move_and_click(driver, el)
+                _type_with_hold(driver, el, val,
+                                hold_min=0.05, hold_max=0.14,
+                                think_prob=0.08, think_range=(0.2, 0.6))
+                time.sleep(random.uniform(0.1, 0.3))
+            except Exception:
+                pass
+
+        # Submit
+        try:
+            submit = wait_for(driver, "button[type='submit']", timeout=5)
+            _human_move_and_click(driver, submit)
+        except Exception:
+            pass
+
+        return _get_session_id(driver)
+
+
+def trace_conditioned_bot(driver, skip_honeypot=False):
+    """Tier 4 — Trace-conditioned: replays perturbed human traces for
+    mouse/scroll on every page, combined with human-like typing.
+
+    Unlike replay_bot (tier 2) which replays mouse but types mechanically,
+    this bot uses human timing profiles for ALL modalities: mouse trajectories,
+    scroll patterns, keystroke intervals, and click cadence — all drawn from
+    real human data with noise injection.
+
+    The result is a session whose statistical properties closely match real
+    human sessions, making it the hardest scripted bot to detect.
+    """
+    # Load both human segments (for mouse/scroll replay) and timing profiles
+    human_files = sorted(HUMAN_DATA_DIR.glob("*.json")) if HUMAN_DATA_DIR.exists() else []
+    if not human_files:
+        print("  WARNING: No human data — falling back to stealth_bot")
+        return stealth_bot(driver, skip_honeypot=skip_honeypot)
+
+    # Pick a random human session to condition on
+    source_path = random.choice(human_files)
+    segments = _load_replay_segments(str(source_path))
+    profiles = _load_human_timing_profiles()
+    profile = random.choice(profiles) if profiles else None
+
+    if not segments:
+        print("  WARNING: Empty human session — falling back to stealth_bot")
+        return stealth_bot(driver, skip_honeypot=skip_honeypot)
+
+    print(f"  Conditioning on: {source_path.name}")
+
+    # Timing from human profile
+    key_intervals = profile["key_intervals"] if profile else []
+    click_intervals = profile["click_intervals"] if profile else []
+
+    # --- Page 1: Home (replayed human mouse + scroll) ---
+    _go_home(driver)
+    seg = random.choice(segments)
+    _replay_mouse(driver, seg.get("mouse", []), max_events=40)
+    _replay_scroll(driver, seg.get("scroll", []), max_events=5)
+    _idle_fidget(driver, random.uniform(0.3, 0.8))
+
+    if not _pick_concert(driver, _human_move_and_click):
+        return
+
+    # --- Page 2: Seat Selection (replayed human mouse) ---
+    seg = random.choice(segments)
+    _replay_mouse(driver, seg.get("mouse", []), max_events=80)
+    _replay_scroll(driver, seg.get("scroll", []), max_events=5)
+    _idle_fidget(driver, random.uniform(0.2, 0.6))
+
+    if not _pick_section(driver, _human_move_and_click):
+        return
+
+    # --- Page 3: Checkout (human-profiled typing + replayed mouse) ---
+    seg = random.choice(segments)
+    _replay_mouse(driver, seg.get("mouse", []), max_events=40)
+    time.sleep(random.uniform(0.3, 0.6))
+
+    # Type using human-sampled intervals with key hold
+    def _type_trace_conditioned(element, text):
+        _type_with_hold(driver, element, text,
+                        hold_min=0.04, hold_max=0.13,
+                        think_prob=0.08, think_range=(0.2, 0.7))
+        # Occasionally add a human-profiled pause between fields
+        if key_intervals and random.random() < 0.3:
+            pause = _sample_from_human(key_intervals, 80, 400)
+            time.sleep(pause)
+
+    def _trace_move_and_click(driver_arg, element, click_only=False):
+        # Occasionally replay a small mouse segment before clicking
+        if random.random() < 0.25 and segments:
+            s = random.choice(segments)
+            _replay_mouse(driver_arg, s.get("mouse", []), max_events=15)
+        _human_move_and_click(driver_arg, element, click_only=click_only)
+        # Use human click cadence
+        if click_intervals and random.random() < 0.4:
+            pause = _sample_from_human(click_intervals, 200, 1500)
+            time.sleep(min(pause, 1.5))
+
+    return _fill_checkout_targeted(driver, _type_trace_conditioned,
+                                   _trace_move_and_click,
+                                   skip_honeypot=skip_honeypot)
 
 
 # ---------------------------------------------------------------------------
@@ -1405,17 +1838,14 @@ def replay_bot(driver, source_path: str, skip_honeypot=False):
 # ---------------------------------------------------------------------------
 
 def _load_replay_segments(source_path: str) -> list[dict]:
-    """Load segments from a Chrome extension JSON export."""
+    """Load segments from a session JSON file (live-confirm format)."""
     with open(source_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     segments = []
     if isinstance(data, dict):
-        for key, val in data.items():
-            if isinstance(val, dict) and "segments" in val:
-                segments.extend(val["segments"])
-            elif isinstance(val, dict):
-                segments.append(val)
+        if "segments" in data and isinstance(data["segments"], list):
+            segments = data["segments"]
     elif isinstance(data, list):
         segments = data
 
@@ -1423,56 +1853,57 @@ def _load_replay_segments(source_path: str) -> list[dict]:
 
 
 def _replay_mouse(driver, mouse_events: list[dict], max_events: int = 100):
-    """Replay mouse movements with Gaussian noise and human-like timing."""
+    """Replay mouse movements via JS dispatch — no out-of-bounds errors.
+
+    Uses dispatchEvent with absolute clientX/clientY so coordinates never
+    drift. tracking.js picks these up the same as real mouse events.
+    """
     if not mouse_events:
         return
 
     events = mouse_events[:max_events]
-    actions = ActionChains(driver)
-    prev_x, prev_y = None, None
-    prev_t = 0
 
+    # Get actual viewport dimensions
+    vp_w = driver.execute_script("return window.innerWidth") or 1280
+    vp_h = driver.execute_script("return window.innerHeight") or 720
+    margin = 30
+
+    # Find the bounding box of the recorded trace
+    xs = [e.get("x", e.get("pageX", 0)) or 0 for e in events]
+    ys = [e.get("y", e.get("pageY", 0)) or 0 for e in events]
+    src_min_x, src_max_x = min(xs), max(xs)
+    src_min_y, src_max_y = min(ys), max(ys)
+    src_w = max(src_max_x - src_min_x, 1)
+    src_h = max(src_max_y - src_min_y, 1)
+
+    # Scale to fit within viewport
+    scale = min((vp_w - 2 * margin) / src_w,
+                (vp_h - 2 * margin) / src_h, 1.0)
+
+    prev_t = 0
     for evt in events:
-        x = evt.get("x", evt.get("pageX", 0))
-        y = evt.get("y", evt.get("pageY", 0))
+        raw_x = evt.get("x", evt.get("pageX", 0)) or 0
+        raw_y = evt.get("y", evt.get("pageY", 0)) or 0
         t = evt.get("t", evt.get("timestamp", 0))
 
-        if x is None or y is None:
-            continue
+        # Normalize + noise + clamp
+        nx = (raw_x - src_min_x) * scale + margin + random.gauss(0, 3)
+        ny = (raw_y - src_min_y) * scale + margin + random.gauss(0, 2)
+        nx = int(max(margin, min(vp_w - margin, nx)))
+        ny = int(max(margin, min(vp_h - margin, ny)))
 
-        # Add human-like noise (Gaussian)
-        x += random.gauss(0, 6)
-        y += random.gauss(0, 4)
-        x = max(10, min(1900, x))
-        y = max(10, min(1060, y))
+        # Dispatch a real mousemove event via JS
+        driver.execute_script(
+            "document.elementFromPoint(arguments[0],arguments[1])"
+            "?.dispatchEvent(new MouseEvent('mousemove',{clientX:arguments[0],"
+            "clientY:arguments[1],bubbles:true}));",
+            nx, ny,
+        )
 
-        if prev_x is not None:
-            dx = int(x - prev_x)
-            dy = int(y - prev_y)
-            dx = max(-200, min(200, dx))
-            dy = max(-200, min(200, dy))
-
-            dt = (t - prev_t) / 1000 if prev_t else 0.015
-            # Add timing jitter
-            dt = max(0.005, min(0.3, dt)) * random.uniform(0.7, 1.3)
-
-            if dx != 0 or dy != 0:
-                actions.move_by_offset(dx, dy)
-                actions.pause(dt)
-
-                # Occasional micro-correction (human steadying hand)
-                if random.random() < 0.1:
-                    actions.move_by_offset(
-                        random.randint(-2, 2), random.randint(-2, 2)
-                    )
-                    actions.pause(random.uniform(0.01, 0.03))
-
-        prev_x, prev_y, prev_t = x, y, t
-
-    try:
-        actions.perform()
-    except Exception as e:
-        print(f"  Replay mouse error (non-fatal): {e}")
+        dt = (t - prev_t) / 1000 if prev_t else 0.015
+        dt = max(0.005, min(0.15, dt)) * random.uniform(0.8, 1.2)
+        time.sleep(dt)
+        prev_t = t
 
 
 def _replay_scroll(driver, scroll_events: list[dict], max_events: int = 10):
@@ -1505,7 +1936,8 @@ def _get_session_id(driver) -> str | None:
         return None
 
 
-def _export_and_confirm(driver, run_index: int, session_id: str | None = None) -> None:
+def _export_and_confirm(driver, run_index: int, session_id: str | None = None,
+                        bot_type: str = "unknown") -> None:
     """Pull telemetry from backend, save to data/bot/, confirm as bot."""
     import urllib.request
 
@@ -1548,26 +1980,24 @@ def _export_and_confirm(driver, run_index: int, session_id: str | None = None) -
     print(f"  Events: {len(mouse)} mouse, {len(clicks)} clicks, "
           f"{len(keystrokes)} keystrokes, {len(scroll)} scroll")
 
-    # Save JSON
+    # Save JSON — use the same live_confirm format as human sessions
+    # so the export structure itself doesn't leak the label.
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%f")
-    filename = f"telemetry_export_{ts}_selenium_run{run_index}.json"
+    filename = f"session_{session_id[:13]}_{ts}.json"
     out_path = DATA_DIR / filename
 
     consolidated = {
-        session_id: {
-            "sessionId": session_id,
-            "startTime": int(time.time() * 1000),
-            "pageMeta": [],
-            "totalSegments": 1,
-            "segments": [{
-                "segmentId": 1, "url": SITE_URL, "hostname": "localhost",
-                "startTime": int(time.time() * 1000),
-                "endTime": int(time.time() * 1000),
-                "mouse": mouse, "clicks": clicks,
-                "keystrokes": keystrokes, "scroll": scroll,
-            }],
-        }
+        "sessionId": session_id,
+        "label": 0,
+        "exportedAt": datetime.now(timezone.utc).isoformat(),
+        "source": "live_confirm",
+        "bot_type": bot_type,
+        "tier": BOT_TIER.get(bot_type, 0),
+        "segments": [{
+            "mouse": mouse, "clicks": clicks,
+            "keystrokes": keystrokes, "scroll": scroll,
+        }],
     }
     with open(out_path, "w") as f:
         json.dump(consolidated, f, indent=2)
@@ -1598,7 +2028,10 @@ def _export_and_confirm(driver, run_index: int, session_id: str | None = None) -
 def main():
     parser = argparse.ArgumentParser(description="Run bot against TicketMonarch")
     parser.add_argument("--runs", type=int, default=3, help="Number of bot sessions")
-    parser.add_argument("--type", choices=["linear", "scripted", "replay", "tabber", "slow", "erratic", "speedrun", "stealth", "mixed"], default="scripted")
+    parser.add_argument("--type", choices=[
+        "linear", "scripted", "replay", "tabber", "slow", "erratic",
+        "speedrun", "stealth", "semi_auto", "trace_conditioned", "mixed",
+    ], default="scripted")
     parser.add_argument("--replay-source", type=str, help="JSON file for replay bot")
     parser.add_argument("--pause-between", type=float, default=2.0, help="Seconds between runs")
     parser.add_argument("--skip-honeypot", action="store_true", help="Skip unknown form fields (avoids honeypot traps)")
@@ -1622,10 +2055,12 @@ def main():
             try:
                 bot_type = args.type
                 if bot_type == "mixed":
-                    # 50% stealth (hardest), 25% scripted (medium), 25% easy/obvious bots
+                    # Diverse mix across all tiers
                     bot_type = random.choices(
-                        ["linear", "scripted", "tabber", "slow", "erratic", "speedrun", "stealth"],
-                        weights=[0.05, 0.25, 0.05, 0.05, 0.05, 0.05, 0.50],
+                        ["linear", "scripted", "tabber", "slow", "erratic",
+                         "speedrun", "stealth", "semi_auto", "trace_conditioned"],
+                        weights=[0.06, 0.18, 0.04, 0.10, 0.05,
+                                 0.04, 0.25, 0.15, 0.13],
                     )[0]
                     print(f"  Mixed mode → {bot_type}")
 
@@ -1650,6 +2085,10 @@ def main():
                     captured_sid = speedrun_bot(driver, skip_honeypot=skip)
                 elif bot_type == "stealth":
                     captured_sid = stealth_bot(driver, skip_honeypot=skip)
+                elif bot_type == "semi_auto":
+                    captured_sid = semi_auto_bot(driver, skip_honeypot=skip)
+                elif bot_type == "trace_conditioned":
+                    captured_sid = trace_conditioned_bot(driver, skip_honeypot=skip)
                 run_succeeded = captured_sid is not None
                 if run_succeeded:
                     print(f"  Run {i + 1} complete.")
@@ -1662,7 +2101,8 @@ def main():
 
             # Auto-export telemetry and confirm as bot (skip if run failed)
             if run_succeeded:
-                _export_and_confirm(driver, i + 1, session_id=captured_sid)
+                _export_and_confirm(driver, i + 1, session_id=captured_sid,
+                                    bot_type=bot_type)
             else:
                 print("  Skipping export — run did not complete successfully")
 

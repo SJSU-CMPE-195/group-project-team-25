@@ -172,7 +172,7 @@ def get_recent_session_ids() -> list[str]:
 
 
 def save_telemetry_json(session_id: str, raw: dict, run_index: int) -> Path:
-    """Save raw telemetry in Chrome extension export format."""
+    """Save raw telemetry in live_confirm format (same as human exports)."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     mouse = raw.get("mouse", [])
@@ -181,27 +181,21 @@ def save_telemetry_json(session_id: str, raw: dict, run_index: int) -> Path:
     scroll = raw.get("scroll", [])
 
     consolidated = {
-        session_id: {
-            "sessionId": session_id,
-            "startTime": int(time.time() * 1000),
-            "pageMeta": [],
-            "totalSegments": 1,
-            "segments": [{
-                "segmentId": 1,
-                "url": SITE_URL,
-                "hostname": "localhost",
-                "startTime": int(time.time() * 1000),
-                "endTime": int(time.time() * 1000),
-                "mouse": mouse,
-                "clicks": clicks,
-                "keystrokes": keystrokes,
-                "scroll": scroll,
-            }],
-        }
+        "sessionId": session_id,
+        "label": 0,
+        "exportedAt": datetime.now(timezone.utc).isoformat(),
+        "source": "live_confirm",
+        "bot_type": "llm",
+        "segments": [{
+            "mouse": mouse,
+            "clicks": clicks,
+            "keystrokes": keystrokes,
+            "scroll": scroll,
+        }],
     }
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%f")
-    filename = f"telemetry_export_{ts}_llm_run{run_index}.json"
+    filename = f"session_{session_id[:13]}_{ts}.json"
     out_path = DATA_DIR / filename
 
     with open(out_path, "w") as f:

@@ -1,14 +1,9 @@
 """Data loader for the classifier — handles all JSON formats in data/human/ and data/bot/.
 
-Replaces the dependency on rl_captcha.data.loader.load_from_directory() which
-doesn't correctly parse the live-confirm export format (single flat session
-object with a top-level ``segments`` key).
-
 Supported formats:
     1. Single flat session: ``{ "sessionId": "...", "mouse": [...], ... }``
     2. Single session with segments: ``{ "sessionId": "...", "segments": [{ "mouse": [...], ... }] }``
-    3. Chrome extension export: ``{ "<session_id>": { "segments": [...] }, ... }``
-    4. Flat array: ``[ { "session_id": "...", "mouse": [...] }, ... ]``
+    3. Flat array: ``[ { "session_id": "...", "mouse": [...] }, ... ]``
 """
 
 from __future__ import annotations
@@ -94,7 +89,7 @@ def _load_json_file(path: Path, label: int) -> list[Session]:
         first_val = next(iter(data.values()), None) if data else None
 
         if isinstance(first_val, dict) and "segments" in first_val:
-            # Format 3: chrome extension export (keys are session IDs)
+            # Dict keyed by session ID — treat first value's segments
             for sid, session_data in data.items():
                 mouse, clicks, keystrokes, scroll = _merge_segments(
                     session_data.get("segments", [])
@@ -104,7 +99,7 @@ def _load_json_file(path: Path, label: int) -> list[Session]:
                     label=label,
                     mouse=mouse, clicks=clicks,
                     keystrokes=keystrokes, scroll=scroll,
-                    metadata={"source": "chrome_extension", "source_file": path.name},
+                    metadata={"source_file": path.name},
                 ))
         else:
             # Format 1 or 2: single session object

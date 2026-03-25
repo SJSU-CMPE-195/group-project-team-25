@@ -574,7 +574,7 @@ def agent_confirm():
 
         # ── Save session to JSON for training data ──
         # Only save for human sessions; bot sessions are already exported
-        # by the bot scripts themselves (telemetry_export_* files).
+        # by the bot scripts themselves.
         json_path = None
         if true_label == 1:
             data_dir = Path(__file__).resolve().parent.parent.parent / 'data' / 'human'

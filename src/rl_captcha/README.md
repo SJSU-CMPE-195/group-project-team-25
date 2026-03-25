@@ -94,7 +94,7 @@ rl_captcha/
 │
 ├── data/
 │   └── loader.py                # Session dataclass, load_from_directory()
-│                                # Supports: chrome extension, live_confirm, flat JSON
+│                                # Supports: live_confirm, flat JSON
 │
 ├── environment/
 │   └── event_env.py             # Windowed Gymnasium env (26-dim obs, 7 actions)
@@ -135,7 +135,6 @@ Training data lives in `data/human/` (label=1) and `data/bot/` (label=0). Sessio
 
 **Supported file formats:**
 - `session_*.json` -- Live-confirm format from Dev Dashboard: `{ "sessionId": "...", "segments": [{ "mouse": [...], ... }] }`
-- `telemetry_*.json` -- Chrome extension export: `{ "<sessionId>": { "segments": [...], "pageMeta": [...] } }`
 
 **Important:** Only include data from the TicketMonarch site (localhost). Data from external sites will pollute the training distribution.
 
@@ -161,13 +160,13 @@ Use `--algorithm` to select between `ppo`, `dg`, or `soft_ppo`:
 
 ```powershell
 # Train PPO (default)
-python -m rl_captcha.scripts.train_ppo --algorithm ppo --data-dir data/ --save-path rl_captcha/agent/checkpoints/ppo_run1 --total-timesteps 500000 2>&1 | Tee-Object -FilePath logs/ppo_training.log
+python -u -m rl_captcha.scripts.train_ppo --algorithm ppo --data-dir data/ --save-path rl_captcha/agent/checkpoints/ppo_run1 --total-timesteps 500000 2>&1 | Tee-Object -FilePath logs/ppo_training.log
 
 # Train DG
-python -m rl_captcha.scripts.train_ppo --algorithm dg --data-dir data/ --save-path rl_captcha/agent/checkpoints/dg_run1 --total-timesteps 500000 2>&1 | Tee-Object -FilePath logs/dg_training.log
+python -u -m rl_captcha.scripts.train_ppo --algorithm dg --data-dir data/ --save-path rl_captcha/agent/checkpoints/dg_run1 --total-timesteps 500000 2>&1 | Tee-Object -FilePath logs/dg_training.log
 
 # Train Soft PPO
-python -m rl_captcha.scripts.train_ppo --algorithm soft_ppo --data-dir data/ --save-path rl_captcha/agent/checkpoints/soft_ppo_run1 --total-timesteps 500000 --target-entropy-ratio 0.5 2>&1 | Tee-Object -FilePath logs/soft_ppo_training.log
+python -u -m rl_captcha.scripts.train_ppo --algorithm soft_ppo --data-dir data/ --save-path rl_captcha/agent/checkpoints/soft_ppo_run1 --total-timesteps 500000 --target-entropy-ratio 0.5 2>&1 | Tee-Object -FilePath logs/soft_ppo_training.log
 ```
 
 #### Training CLI Flags
@@ -190,17 +189,39 @@ python -m rl_captcha.scripts.train_ppo --algorithm soft_ppo --data-dir data/ --s
 
 ### 3. Evaluate
 
-Evaluate one or more checkpoints in a single run:
+Evaluate one or more checkpoints in a single run. Evaluation now includes **per-bot-family** and **per-tier** detection rate breakdowns alongside global metrics.
 
 ```powershell
-# Single agent
+# Single agent — basic eval on test split
 python -m rl_captcha.scripts.evaluate_ppo --agent rl_captcha/agent/checkpoints/ppo_run1 --episodes 500 --split test
 
-# All three at once (prints comparison table)
+# Single agent — eval on ALL data (no split)
+python -m rl_captcha.scripts.evaluate_ppo --agent rl_captcha/agent/checkpoints/ppo_run1 --episodes 500 --split all
+
+# All three agents at once (prints comparison table)
 python -m rl_captcha.scripts.evaluate_ppo --agent ppo=rl_captcha/agent/checkpoints/ppo_run1 dg=rl_captcha/agent/checkpoints/dg_run1 soft_ppo=rl_captcha/agent/checkpoints/soft_ppo_run1 --episodes 500 --split test 2>&1 | Tee-Object -FilePath logs/eval_all.log
+
+# Held-out generalization: hold out specific bot families from training
+python -m rl_captcha.scripts.evaluate_ppo --agent rl_captcha/agent/checkpoints/ppo_run1 --episodes 500 --held-out-families stealth replay
+
+# Held-out generalization: hold out entire tiers from training
+python -m rl_captcha.scripts.evaluate_ppo --agent rl_captcha/agent/checkpoints/ppo_run1 --episodes 500 --held-out-tiers 3 4
 ```
 
-Outputs per-agent confusion matrix, accuracy, precision, recall, F1, outcome distribution, action distribution, and a side-by-side comparison table when multiple agents are provided.
+Outputs per-agent: confusion matrix, accuracy, precision, recall, F1, outcome distribution, action distribution, **per-bot-family detection table**, **per-tier summary**, and a side-by-side comparison table when multiple agents are provided.
+
+#### Tiered Adversarial Evaluation
+
+Bot types are organized into tiers of increasing sophistication:
+
+| Tier | Name | Bot Types | Description |
+|------|------|-----------|-------------|
+| 1 | Commodity | linear, tabber, speedrun | Simple, fast, easily detectable |
+| 2 | Careful Automation | scripted, stealth, slow, erratic, replay | Tries to mimic human timing/patterns |
+| 3 | Semi-Automated | semi_auto | Mix of real human + bot actions in one session |
+| 4 | Trace-Conditioned | trace_conditioned | Replays perturbed real human traces |
+
+The `--held-out-families` and `--held-out-tiers` flags let you test **generalization**: train on some bot types, then evaluate on unseen ones. Held-out bots are removed from train/val and placed entirely in the test set.
 
 #### Evaluation CLI Flags
 
@@ -212,6 +233,8 @@ Outputs per-agent confusion matrix, accuracy, precision, recall, F1, outcome dis
 | `--split` | `test` | Data split: `test`, `val`, `train`, or `all` |
 | `--split-seed` | `42` | Random seed for split (must match training) |
 | `--device` | `auto` | Compute device: `auto`, `cuda`, or `cpu` |
+| `--held-out-families` | `None` | Bot families to hold out from train/val (test-only) |
+| `--held-out-tiers` | `None` | Bot tiers to hold out from train/val (test-only) |
 
 ### 4. Visualize
 

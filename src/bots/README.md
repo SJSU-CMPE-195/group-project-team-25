@@ -40,7 +40,7 @@ python bots/selenium_bot.py --runs 5 --type linear
 
 # Replay bot -- replays real human mouse patterns with noise
 python bots/selenium_bot.py --runs 3 --type replay \
-    --replay-source data/human/telemetry_export_example.json
+    --replay-source data/human/session_example.json
 ```
 
 ### How It Works
@@ -59,8 +59,8 @@ python bots/selenium_bot.py --runs 3 --type replay \
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--runs` | `3` | Number of bot sessions to run |
-| `--type` | `scripted` | Bot behavior: `linear`, `scripted`, or `replay` |
-| `--replay-source` | -- | Path to human telemetry JSON (required for `replay`) |
+| `--type` | `scripted` | Bot behavior: `linear`, `scripted`, `stealth`, `slow`, `erratic`, `speedrun`, `tabber`, `replay`, `semi_auto`, `trace_conditioned`, or `mixed` |
+| `--replay-source` | -- | Path to human session JSON (required for `replay`) |
 | `--pause-between` | `2.0` | Seconds between runs |
 
 ## LLM Bot

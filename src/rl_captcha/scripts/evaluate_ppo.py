@@ -25,7 +25,10 @@ from collections import defaultdict
 import numpy as np
 
 from rl_captcha.config import Config
-from rl_captcha.data.loader import load_from_directory, split_sessions
+from rl_captcha.data.loader import (
+    load_from_directory, split_sessions, split_sessions_by_family,
+    bot_type_to_tier, TIER_NAMES,
+)
 from rl_captcha.environment.event_env import EventEnv, ACTION_NAMES
 from rl_captcha.agent.ppo_lstm import PPOLSTM
 from rl_captcha.agent.dg_lstm import DGLSTM, DGConfig
@@ -47,6 +50,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--split-seed", type=int, default=42,
                     help="Random seed for split (must match training)")
     p.add_argument("--device", type=str, default="auto")
+    p.add_argument("--held-out-families", type=str, nargs="*", default=None,
+                    help="Bot families to hold out from train/val (test-only)")
+    p.add_argument("--held-out-tiers", type=int, nargs="*", default=None,
+                    help="Bot tiers to hold out from train/val (test-only)")
     return p.parse_args()
 
 
@@ -102,9 +109,19 @@ def main():
         eval_sessions = sessions
         print(f"  Evaluating on ALL {len(eval_sessions)} sessions")
     else:
-        train_s, val_s, test_s = split_sessions(
-            sessions, train=0.70, val=0.15, test=0.15, seed=args.split_seed,
-        )
+        if args.held_out_families or args.held_out_tiers:
+            print(f"  Held-out families: {args.held_out_families or '(none)'}")
+            print(f"  Held-out tiers:    {args.held_out_tiers or '(none)'}")
+            train_s, val_s, test_s = split_sessions_by_family(
+                sessions,
+                held_out_families=args.held_out_families,
+                held_out_tiers=args.held_out_tiers,
+                train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+            )
+        else:
+            train_s, val_s, test_s = split_sessions(
+                sessions, train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+            )
         splits = {"train": train_s, "val": val_s, "test": test_s}
         eval_sessions = splits[args.split]
         h = sum(1 for s in eval_sessions if s.label == 1)
@@ -137,6 +154,7 @@ def main():
         results = _run_evaluation(env, agent, args.episodes, agent_name=name)
         all_results[name] = results
         _print_results(results, agent_name=name, split_name=args.split)
+        _print_per_family_results(results, agent_name=name)
 
     # Print comparison table if multiple agents
     if len(all_results) > 1:
@@ -183,6 +201,7 @@ def _run_evaluation(
             agent.reset_hidden()
 
         true_label = info["true_label"]
+        bot_type = info.get("bot_type")
         total_reward = 0.0
         steps = 0
         actions_taken = []
@@ -202,6 +221,7 @@ def _run_evaluation(
 
         episode_data.append({
             "true_label": true_label,
+            "bot_type": bot_type,
             "outcome": info.get("outcome", "unknown"),
             "reward": total_reward,
             "steps": steps,
@@ -313,6 +333,55 @@ def _print_results(results: dict, agent_name: str = "agent", split_name: str = "
     if bot_eps:
         avg_bot_steps = np.mean([e["steps"] for e in bot_eps])
         print(f"  Avg steps (bot sessions):   {avg_bot_steps:.1f}")
+    print()
+
+
+def _print_per_family_results(results: dict, agent_name: str = "agent"):
+    """Print per-bot-family and per-tier detection rate breakdowns."""
+    episodes = results["episodes"]
+    bot_eps = [e for e in episodes if e["true_label"] == 0]
+
+    if not bot_eps:
+        return
+
+    # --- Per-family breakdown ---
+    by_family: dict[str, list[dict]] = defaultdict(list)
+    for e in bot_eps:
+        family = e.get("bot_type") or "unknown"
+        by_family[family].append(e)
+
+    detected_outcomes = {"correct_block", "bot_blocked_puzzle"}
+
+    print(f"--- Per-Family Bot Detection ({agent_name}) ---")
+    print(f"  {'Family':<18s} {'Tier':>4s} {'N':>5s} {'Detect':>7s} {'Miss':>5s} {'Rate':>7s}")
+    print(f"  {'-' * 48}")
+
+    for family in sorted(by_family.keys()):
+        eps = by_family[family]
+        n = len(eps)
+        detected = sum(1 for e in eps if e["outcome"] in detected_outcomes)
+        missed = n - detected
+        rate = detected / n if n > 0 else 0.0
+        tier = bot_type_to_tier(family if family != "unknown" else None)
+        tier_str = str(tier) if tier > 0 else "?"
+        print(f"  {family:<18s} {tier_str:>4s} {n:5d} {detected:7d} {missed:5d} {rate:7.1%}")
+
+    print()
+
+    # --- Per-tier breakdown ---
+    by_tier: dict[int, list[dict]] = defaultdict(list)
+    for e in bot_eps:
+        tier = bot_type_to_tier(e.get("bot_type"))
+        by_tier[tier].append(e)
+
+    print(f"--- Per-Tier Summary ({agent_name}) ---")
+    for tier_num in sorted(by_tier.keys()):
+        eps = by_tier[tier_num]
+        n = len(eps)
+        detected = sum(1 for e in eps if e["outcome"] in detected_outcomes)
+        rate = detected / n if n > 0 else 0.0
+        tier_name = TIER_NAMES.get(tier_num, "Unknown")
+        print(f"  Tier {tier_num} ({tier_name}): {n:4d} bots, {rate:.1%} detected")
     print()
 
 

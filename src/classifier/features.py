@@ -2,7 +2,7 @@
 
 Aggregates raw telemetry events from a Session into a fixed-size numeric
 feature vector. Features are derived from the actual fields present in the
-Chrome extension telemetry export format.
+live-confirm telemetry export format.
 
 Confirmed field structure (from data/human/ and data/bot/):
     Mouse:      x, y, t, pageX, pageY          (no dt_since_last)

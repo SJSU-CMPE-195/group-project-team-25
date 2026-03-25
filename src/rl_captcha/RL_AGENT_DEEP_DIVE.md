@@ -81,7 +81,7 @@ This document walks through every component of the RL CAPTCHA agent codebase in 
 
 ### Session Dataclass
 
-Every data source (MySQL, Chrome extension, JSON files) gets normalized into one format:
+Every data source (MySQL, JSON files, CSV) gets normalized into one format:
 
 ```python
 @dataclass
@@ -100,15 +100,13 @@ class Session:
 | Function | Source | Format |
 |----------|--------|--------|
 | `load_from_directory(path)` | `data/human/` + `data/bot/` | Auto-detect JSON format |
-| `load_from_json(path)` | Single JSON file | Chrome extension export |
 | `load_from_csv(path)` | CSV export | Webapp tracking CSV |
 | `load_from_mysql(config)` | MySQL database | TicketMonarch user_sessions table |
 
-`load_from_directory()` is the primary loader used during training. It scans `data/human/*.json` (labeled as human) and `data/bot/*.json` (labeled as bot), auto-detecting three JSON formats:
+`load_from_directory()` is the primary loader used during training. It scans `data/human/*.json` (labeled as human) and `data/bot/*.json` (labeled as bot), auto-detecting two JSON formats:
 
-1. **Chrome extension format:** `{ "<sessionId>": { "segments": [...] } }` — dict keyed by session IDs, each with a `segments` array of telemetry batches.
-2. **Live-confirm format:** `{ "sessionId": "...", "segments": [...] }` — single session with segments array.
-3. **Flat array format:** `[{ "session_id": "...", "mouse": [...], ... }]` — list of session objects.
+1. **Live-confirm format:** `{ "sessionId": "...", "segments": [...] }` — single session with segments array.
+2. **Flat array format:** `[{ "session_id": "...", "mouse": [...], ... }]` — list of session objects.
 
 ### Stratified Splitting
 

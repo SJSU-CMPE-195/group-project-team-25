@@ -22,7 +22,6 @@ src/
 │   └── .env.example        # MySQL connection config template
 ├── rl_captcha/             # PPO+LSTM agent (training & evaluation)
 ├── bots/                   # Selenium & LLM bots for data collection
-├── chrome-extension/       # Telemetry capture extension
 └── data/                   # Training data (human/ and bot/)
 ```
 
@@ -119,43 +118,6 @@ Open **http://localhost:3000/dev** in a separate tab.
 - **Live Monitor:** Auto-detects the active session, polls every 1 second showing real-time event counts and rolling bot probability.
 - **Analyze Session:** Full agent analysis on any session — decision banner, action probability bars, per-event timeline, LSTM hidden-state heatmap.
 
-## Chrome Extension (Telemetry Collector)
-
-The Chrome extension captures raw user-interaction telemetry (mouse, clicks, keystrokes, scrolls) for training data collection. Both human sessions and bot sessions use this extension.
-
-### Loading the Extension
-
-1. Open `chrome://extensions/` (or `edge://extensions/` on Edge)
-2. Enable **Developer mode** (top-right toggle)
-3. Click **Load unpacked**
-4. Select the `chrome-extension/` folder from this repo
-5. The **TicketMonarch Telemetry Collector** icon appears in your toolbar
-
-### Using the Extension
-
-1. Click the extension icon to open the popup
-2. Click **Start Recording** — the status dot turns green and pulses
-3. Browse the site normally (all tabs are captured)
-4. The popup shows live counts: mouse samples, clicks, keystrokes, scroll events
-5. Click **Stop Recording** when done
-6. Click **Export JSON** to download a `telemetry_export_<timestamp>.json` file
-7. Save the file to `data/human/` (for human data) or `data/bot/` (for bot data)
-
-### What Gets Captured
-
-| Signal | Sample Rate | Data Captured |
-|--------|-------------|---------------|
-| Mouse movement | sampled after real movement | Client X/Y, page X/Y, timestamp |
-| Clicks | Every click | Position, button, target element info, time delta |
-| Keystrokes | Every key | Field ID, down/up, timestamp, special keys only (NO characters/passwords) |
-| Scroll | ~20 Hz (50 ms) | X/Y position, delta, timestamp |
-| Client hints | Once per page | Screen size, timezone, language, device memory, user agent |
-| Network meta | Once per page | Connection type, bandwidth, RTT, page load timings |
-
-Data is segmented around 3+ second idle gaps for temporal coherence. Stationary cursors do not continuously emit duplicate mouse points anymore.
-
----
-
 ## Running the Bots
 
 Bots drive a real Chrome browser through the full booking flow to generate labeled training data. The frontend's built-in `tracking.js` captures all telemetry automatically, so the bots just need to interact with the site.
@@ -187,9 +149,11 @@ Three behavior profiles that produce progressively harder-to-detect bot data:
 
 | Profile | Mouse Movement | Typing | Scrolling | Detection Difficulty |
 |---------|---------------|--------|-----------|---------------------|
-| `linear` | Straight-line + light idle fidgeting | Uniform 20 ms intervals | None | Easy |
-| `scripted` | Bezier curves + light idle fidgeting | Variable timing, burst typing, thinking pauses | Momentum-based random scrolls | Medium |
-| `replay` | Replays recorded human mouse data + Gaussian noise | Uniform-ish | Replayed from source with variance | Hard |
+| `linear` | Straight-line + light idle fidgeting | Uniform 20 ms intervals | None | Tier 1 — Easy |
+| `scripted` | Bezier curves + light idle fidgeting | Variable timing, burst typing, thinking pauses | Momentum-based random scrolls | Tier 2 — Medium |
+| `stealth` | Human-like Bezier with micro-jitter | Lognormal timing, burst typing | Organic momentum scrolls | Tier 2 — Hard |
+| `semi_auto` | Mix of real human + bot actions | Strategy-dependent | Strategy-dependent | Tier 3 |
+| `trace_conditioned` | Replays perturbed human traces | Human-profiled intervals | Replayed from source | Tier 4 |
 
 All bot types include small idle movements between actions, but these are intentionally limited so bot traces do not dwarf human checkout sessions.
 
@@ -202,9 +166,8 @@ python bots/selenium_bot.py --runs 5 --type linear
 # Scripted bot — Bezier curves, varied timing, scrolling
 python bots/selenium_bot.py --runs 5 --type scripted
 
-# Replay bot — replays real human mouse patterns with noise
-python bots/selenium_bot.py --runs 3 --type replay \
-    --replay-source data/human/telemetry_export_example.json
+# Mixed mode — weighted random across all bot types
+python -m bots.selenium_bot --runs 50 --type mixed --skip-honeypot
 ```
 
 #### All Flags
@@ -212,22 +175,20 @@ python bots/selenium_bot.py --runs 3 --type replay \
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--runs` | `3` | Number of bot sessions to run |
-| `--type` | `scripted` | Bot behavior profile: `linear`, `scripted`, or `replay` |
-| `--replay-source` | — | Path to a human telemetry JSON file (required for `replay` type) |
+| `--type` | `scripted` | Bot behavior: `linear`, `scripted`, `stealth`, `slow`, `erratic`, `speedrun`, `tabber`, `replay`, `semi_auto`, `trace_conditioned`, or `mixed` |
+| `--replay-source` | — | Path to a human session JSON file (required for `replay` type) |
 | `--pause-between` | `2.0` | Seconds to wait between runs |
 
 #### How It Works (Step-by-Step)
 
-1. Opens Chrome with the telemetry Chrome extension loaded
-2. Prompts you to **click "Start Recording"** in the extension popup
-3. Navigates through the full booking flow for each run:
+1. Opens Chrome (telemetry is captured by the site's built-in `tracking.js`)
+2. Navigates through the full booking flow for each run:
    - **Home** → picks a random concert
    - **Seat Selection** → picks a random section, clicks Continue
    - **Checkout** → fills all form fields with fake identity data (8 built-in personas)
    - **Purchase** → submits the order
    - **Challenge handling** → if a CAPTCHA challenge appears, the bot attempts to interact (slider, canvas text, timed click — up to 3 retries)
 4. After each run, the bot pulls telemetry from the backend API, saves it to `data/bot/`, and confirms the session as a bot (`true_label=0`) to trigger an online RL update
-5. After all runs complete, prompts you to **click "Export JSON"** in the extension popup for the raw extension data
 
 #### Behavior Details
 
@@ -332,10 +293,10 @@ Bot interacts with site
         │
         ▼
 tracking.js captures events in browser ──► Backend stores in MySQL
-        │                                        │
-        ▼                                        ▼
-Chrome extension records                Bot pulls from /api/session/raw/<sid>
-(optional, for raw export)              and saves JSON to data/bot/
+                                                 │
+                                                 ▼
+                                        Bot pulls from /api/session/raw/<sid>
+                                        and saves JSON to data/bot/
                                                  │
                                                  ▼
                                         Bot calls /api/agent/confirm
@@ -363,7 +324,7 @@ Because telemetry capture semantics changed, recollect fresh data before trainin
 
 ### 1. Collect Data
 
-**Human data:** Use the Chrome extension to record real browsing sessions. Export JSON and save to `data/human/`.
+**Human data:** Browse the site normally. Sessions are auto-saved to `data/human/` when confirmed via the `/api/agent/confirm` endpoint.
 
 **Bot data:** Run the bots (see above). They automatically save to `data/bot/` and confirm sessions as bots.
 

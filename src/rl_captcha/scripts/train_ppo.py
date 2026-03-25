@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 
 from rl_captcha.config import Config
-from rl_captcha.data.loader import load_from_directory, split_sessions
+from rl_captcha.data.loader import load_from_directory, split_sessions, split_sessions_by_family
 from rl_captcha.environment.event_env import EventEnv
 from rl_captcha.agent.ppo_lstm import PPOLSTM
 from rl_captcha.agent.dg_lstm import DGLSTM, DGConfig
@@ -70,6 +70,11 @@ def parse_args() -> argparse.Namespace:
                     help="Soft PPO target entropy as fraction of max entropy (default: 0.5)")
     p.add_argument("--alpha-lr", type=float, default=3e-4,
                     help="Soft PPO entropy temperature learning rate (default: 3e-4)")
+    # Held-out family evaluation
+    p.add_argument("--held-out-families", type=str, nargs="*", default=None,
+                    help="Bot families to hold out from training (e.g. stealth replay)")
+    p.add_argument("--held-out-tiers", type=int, nargs="*", default=None,
+                    help="Bot tiers to hold out from training (e.g. 3 4 5)")
     return p.parse_args()
 
 
@@ -100,10 +105,20 @@ def main():
         print("ERROR: No sessions found. Place JSON files in data/human/ and data/bot/.")
         return
 
-    # Stratified 70/15/15 split
-    train_sessions, val_sessions, test_sessions = split_sessions(
-        sessions, train=0.70, val=0.15, test=0.15, seed=args.split_seed,
-    )
+    # Stratified 70/15/15 split (with optional held-out families/tiers)
+    if args.held_out_families or args.held_out_tiers:
+        print(f"  Held-out families: {args.held_out_families or '(none)'}")
+        print(f"  Held-out tiers:    {args.held_out_tiers or '(none)'}")
+        train_sessions, val_sessions, test_sessions = split_sessions_by_family(
+            sessions,
+            held_out_families=args.held_out_families,
+            held_out_tiers=args.held_out_tiers,
+            train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+        )
+    else:
+        train_sessions, val_sessions, test_sessions = split_sessions(
+            sessions, train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+        )
     h_tr, b_tr = _label_counts(train_sessions)
     h_va, b_va = _label_counts(val_sessions)
     h_te, b_te = _label_counts(test_sessions)
