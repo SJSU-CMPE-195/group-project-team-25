@@ -38,6 +38,24 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
 
+def _varied_pause(base: float = 0.025, spread: float = 3.0) -> float:
+    """Generate a human-like pause with high variance.
+
+    Humans alternate between fast bursts and slow hesitations.
+    This produces speed_var in the 0.03-0.4 range that real humans exhibit,
+    instead of the near-zero variance from uniform(min, max).
+    """
+    # Log-normal distribution: right-skewed, occasional long pauses
+    raw = random.lognormvariate(0, 0.6) * base
+    # Occasional micro-hesitation (5% chance of a longer pause)
+    if random.random() < 0.05:
+        raw += random.uniform(0.05, 0.2)
+    # Occasional burst speed (10% chance of very fast)
+    if random.random() < 0.10:
+        raw *= 0.3
+    return max(0.003, min(raw * spread, 0.4))
+
+
 SITE_URL = "http://localhost:3000"
 API_URL = "http://localhost:5000"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "bot"
@@ -260,9 +278,9 @@ def _human_move_and_click(driver, element, click_only=False):
         if dx != 0 or dy != 0:
             actions.move_by_offset(dx, dy)
 
-        # Variable speed: slower at start and end, faster in middle
-        speed = 0.01 + 0.02 * (1 - abs(2 * t - 1))
-        actions.pause(speed + random.uniform(0, 0.01))
+        # Variable speed with high variance (like real humans)
+        base_speed = 0.01 + 0.03 * (1 - abs(2 * t - 1))
+        actions.pause(_varied_pause(base_speed, spread=2.5))
 
     try:
         actions.perform()
@@ -301,8 +319,8 @@ def _linear_move_and_click(driver, element, click_only=False):
         off_x = int(remaining * random.uniform(-8, 8))
         off_y = int(remaining * random.uniform(-5, 5))
         actions.move_to_element_with_offset(element, off_x, off_y)
-        # Uniform-ish speed (slightly robotic but generates real events)
-        actions.pause(random.uniform(0.015, 0.04))
+        # Varied speed — still linear path but non-constant speed
+        actions.pause(_varied_pause(0.025, spread=2.0))
 
     actions.move_to_element(element)
     actions.click()
@@ -343,7 +361,7 @@ def _idle_fidget(driver, duration: float = None):
                 dy = int(dy_bias / steps + random.gauss(0, 2))
                 if dx != 0 or dy != 0:
                     actions.move_by_offset(dx, dy)
-                pause = random.uniform(0.02, 0.06)
+                pause = _varied_pause(0.035, spread=2.0)
                 actions.pause(pause)
                 elapsed += pause
             try:
@@ -360,7 +378,7 @@ def _idle_fidget(driver, duration: float = None):
                 dy = random.randint(-4, 4)
                 if dx != 0 or dy != 0:
                     actions.move_by_offset(dx, dy)
-                pause = random.uniform(0.01, 0.04)
+                pause = _varied_pause(0.02, spread=2.0)
                 actions.pause(pause)
                 elapsed += pause
             try:
@@ -380,7 +398,7 @@ def _idle_fidget(driver, duration: float = None):
                 dy = int(radius * math.sin(angle) / arc_steps * 2)
                 if dx != 0 or dy != 0:
                     actions.move_by_offset(dx, dy)
-                pause = random.uniform(0.01, 0.05)
+                pause = _varied_pause(0.025, spread=2.0)
                 actions.pause(pause)
                 elapsed += pause
             try:
@@ -427,10 +445,10 @@ def _page_sweep(driver):
                      + random.gauss(0, 2))
             if dx != 0 or dy != 0:
                 actions.move_by_offset(dx, dy)
-            actions.pause(random.uniform(0.01, 0.02))
+            actions.pause(_varied_pause(0.015, spread=2.5))
 
         # Pause at the target (reading/looking)
-        actions.pause(random.uniform(0.08, 0.25))
+        actions.pause(_varied_pause(0.12, spread=2.0))
 
     try:
         actions.perform()
@@ -467,7 +485,7 @@ def _wander_mouse(driver, duration=None):
                 dy = int(dy_total / steps + random.gauss(0, 3))
                 if dx != 0 or dy != 0:
                     actions.move_by_offset(dx, dy)
-                pause = random.uniform(0.015, 0.04)
+                pause = _varied_pause(0.025, spread=2.0)
                 actions.pause(pause)
                 elapsed += pause
 
@@ -479,7 +497,7 @@ def _wander_mouse(driver, duration=None):
                 dy = int(random.gauss(0, 15))
                 if dx != 0 or dy != 0:
                     actions.move_by_offset(dx, dy)
-                pause = random.uniform(0.03, 0.08)
+                pause = _varied_pause(0.045, spread=2.0)
                 actions.pause(pause)
                 elapsed += pause
 
@@ -492,12 +510,12 @@ def _wander_mouse(driver, duration=None):
                 dy = int(random.gauss(0, 2))  # mostly horizontal
                 if dx != 0 or dy != 0:
                     actions.move_by_offset(dx, dy)
-                pause = random.uniform(0.02, 0.05)
+                pause = _varied_pause(0.03, spread=2.0)
                 actions.pause(pause)
                 elapsed += pause
             # Return-sweep (like going to next line)
             actions.move_by_offset(-int(line_width * 0.8), random.randint(15, 35))
-            actions.pause(random.uniform(0.05, 0.1))
+            actions.pause(_varied_pause(0.06, spread=2.0))
             elapsed += 0.1
 
         try:
@@ -1901,8 +1919,9 @@ def _replay_mouse(driver, mouse_events: list[dict], max_events: int = 100):
         )
 
         dt = (t - prev_t) / 1000 if prev_t else 0.015
-        dt = max(0.005, min(0.15, dt)) * random.uniform(0.8, 1.2)
-        time.sleep(dt)
+        dt = max(0.005, min(0.15, dt))
+        # Add human-like speed variance instead of near-constant replay speed
+        time.sleep(_varied_pause(dt, spread=1.5))
         prev_t = t
 
 
@@ -2114,8 +2133,7 @@ def main():
         print("All runs complete!")
         print(f"Telemetry saved to: {DATA_DIR}")
         print("="*50)
-        if sys.stdin.isatty():
-            input("Press Enter to close the browser...")
+        # Auto-close browser (no prompt) so chained commands run unattended
 
     finally:
         driver.quit()
