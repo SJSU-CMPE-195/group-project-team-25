@@ -102,21 +102,6 @@ class EventEncoder:
             events.append({"_type": EVENT_SCROLL, **evt})
 
         events.sort(key=lambda e: e.get("t", e.get("timestamp", 0)))
-
-        # Human only: drop post-purchase events (confirmation page).
-        # Bots don't reach confirmation, so keeping it for humans would
-        # leak an asymmetric signal the model could exploit as a shortcut.
-        if session.label == 1:
-            purchase_idx = next(
-                (i for i, e in enumerate(events)
-                 if e["_type"] == EVENT_CLICK
-                 and isinstance(e.get("target"), dict)
-                 and e["target"].get("classes") == "purchase-button"),
-                None,
-            )
-            if purchase_idx is not None:
-                events = events[:purchase_idx + 1]  # keep the click, drop the tail
-
         return events
 
     def encode_window(self, events: list[dict]) -> np.ndarray:
