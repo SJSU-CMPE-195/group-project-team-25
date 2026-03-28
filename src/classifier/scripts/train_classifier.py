@@ -29,6 +29,7 @@ import numpy as np
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
+from classifier.augmentation import adversarial_augment_sessions
 from classifier.data_loader import load_from_directory
 from classifier.features import SessionFeatureExtractor, FEATURE_NAMES
 from classifier.model import HumanLikelihoodClassifier
@@ -55,7 +56,15 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--no-adversarial", action="store_true",
-        help="Disable adversarial augmentation (humanized bot copies)",
+        help="Disable feature-level adversarial augmentation",
+    )
+    p.add_argument(
+        "--no-humanizer", action="store_true",
+        help="Disable HumanProfiler raw-telemetry augmentation (easy/medium/hard)",
+    )
+    p.add_argument(
+        "--n-copies-per-level", type=int, default=2,
+        help="Augmented copies per bot per difficulty level (default: 2, total = N*3)",
     )
     p.add_argument(
         "--tune", action="store_true",
@@ -184,35 +193,58 @@ def main() -> None:
         )
 
     # ------------------------------------------------------------------
-    # 2. Extract features
-    # ------------------------------------------------------------------
-    print("[train_classifier] Extracting features ...")
-    extractor = SessionFeatureExtractor()
-    X = extractor.extract_many(labeled)
-    y = np.array([s.label for s in labeled], dtype=int)
-
-    print(f"  Feature matrix shape: {X.shape}  (sessions x features)")
-
-    # ------------------------------------------------------------------
-    # 3. Train / Test split
+    # 2. Train / Test split (at session level, before augmentation)
     # ------------------------------------------------------------------
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
+    y_labels = np.array([s.label for s in labeled], dtype=int)
+    train_idx, test_idx = train_test_split(
+        np.arange(len(labeled)),
         test_size=args.test_size,
-        stratify=y if len(np.unique(y)) > 1 else None,
+        stratify=y_labels if len(np.unique(y_labels)) > 1 else None,
         random_state=args.random_state,
     )
 
-    n_h_train = int((y_train == 1).sum())
-    n_b_train = int((y_train == 0).sum())
-    n_h_test  = int((y_test == 1).sum())
-    n_b_test  = int((y_test == 0).sum())
+    train_sessions = [labeled[i] for i in train_idx]
+    test_sessions  = [labeled[i] for i in test_idx]
 
-    print(f"\n  Train set: {len(y_train)} ({n_h_train}H / {n_b_train}B)")
-    print(f"  Test set : {len(y_test)} ({n_h_test}H / {n_b_test}B)")
+    n_h_train = sum(1 for s in train_sessions if s.label == 1)
+    n_b_train = sum(1 for s in train_sessions if s.label == 0)
+    n_h_test  = sum(1 for s in test_sessions if s.label == 1)
+    n_b_test  = sum(1 for s in test_sessions if s.label == 0)
+
+    print(f"\n  Train set: {len(train_sessions)} ({n_h_train}H / {n_b_train}B)")
+    print(f"  Test set : {len(test_sessions)} ({n_h_test}H / {n_b_test}B)")
+
+    # ------------------------------------------------------------------
+    # 2b. HumanProfiler adversarial augmentation (raw telemetry level)
+    # ------------------------------------------------------------------
+    if not args.no_humanizer:
+        train_humans = [s for s in train_sessions if s.label == 1]
+        train_bots   = [s for s in train_sessions if s.label == 0]
+        augmented = adversarial_augment_sessions(
+            bot_sessions=train_bots,
+            human_sessions=train_humans,
+            n_copies_per_level=args.n_copies_per_level,
+            random_state=args.random_state,
+        )
+        train_sessions = train_sessions + augmented
+        print(f"  Train set after augmentation: {len(train_sessions)} "
+              f"({n_h_train}H / {n_b_train + len(augmented)}B)")
+
+    # ------------------------------------------------------------------
+    # 3. Extract features
+    # ------------------------------------------------------------------
+    print("[train_classifier] Extracting features ...")
+    extractor = SessionFeatureExtractor()
+    X_train = extractor.extract_many(train_sessions)
+    y_train = np.array([s.label for s in train_sessions], dtype=int)
+    X_test  = extractor.extract_many(test_sessions)
+    y_test  = np.array([s.label for s in test_sessions], dtype=int)
+
+    print(f"  Train feature matrix: {X_train.shape}")
+    print(f"  Test feature matrix : {X_test.shape}")
 
     # ------------------------------------------------------------------
     # 4. Optional hyperparameter tuning
