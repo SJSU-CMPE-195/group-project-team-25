@@ -41,7 +41,7 @@ function Checkout() {
   const [challengeState, setChallengeState] = useState(null)
   const [processing, setProcessing] = useState(false)
   const [errors, setErrors] = useState({})
-  const [displayValues, setDisplayValues] = useState({ card_number: '' })
+  const [displayValues, setDisplayValues] = useState({ card_number: ''})
 
   // honeypot state (driven by rolling inference)
   const [honeypotDeployed, setHoneypotDeployed] = useState(false)
@@ -98,6 +98,13 @@ function Checkout() {
     if (name === 'card_number') {
         setDisplayValues(prev => ({ ...prev, card_number: value.replace(/\D/g, '')
                                   .slice(0, 19).replace(/(.{4})/g, '$1 ').trim() })) }
+    if (name === 'card_expiry') {
+       const digits = value.replace(/\D/g, '').slice(0, 4)
+        setFormData(prev => ({
+          ...prev,
+          card_expiry: digits
+      }))
+    }
     // clear error for this field on change
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: null }))
@@ -128,8 +135,9 @@ function Checkout() {
       errs.card_number = 'Card number must be 13–19 digits'
     }
 
-    // --- expiry: MM/YY format ---
-    if (formData.card_expiry.trim() && !/^(0[1-9]|1[0-2])\/\d{2}$/.test(formData.card_expiry.trim())) {
+    // --- expiry: 4 digits forming valid MM and YY (slash optional/ignored) ---
+    const expiryDigits = formData.card_expiry.replace(/\D/g, '')
+    if (formData.card_expiry.trim() && !/^\d{4}$/.test(expiryDigits)) {
       errs.card_expiry = 'Use MM/YY format'
     }
 
@@ -350,7 +358,11 @@ function Checkout() {
                     id="card_expiry"
                     name="card_expiry"
                     className={errors.card_expiry ? 'input-error' : ''}
-                    value={formData.card_expiry}
+                    value={
+                        formData.card_expiry.length > 2
+                          ? formData.card_expiry.slice(0, 2) + '/' + formData.card_expiry.slice(2)
+                          : formData.card_expiry
+                    }
                     onChange={handleChange}
                     placeholder="MM/YY"
                   />
