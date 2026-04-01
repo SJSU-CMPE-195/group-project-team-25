@@ -478,8 +478,8 @@ function makeTargets() {
     label,
     x: 72 + Math.random() * 256,
     y: 74 + Math.random() * 122,
-    vx: (Math.random() > 0.5 ? 1 : -1) * (0.65 + Math.random() * 0.65),
-    vy: (Math.random() > 0.5 ? 1 : -1) * (0.5 + Math.random() * 0.6),
+    vx: (Math.random() > 0.5 ? 1 : -1) * (0.16 + Math.random() * 0.14),
+    vy: (Math.random() > 0.5 ? 1 : -1) * (0.14 + Math.random() * 0.12),
     radius: 24,
     clicked: false,
     color: colors[index],
@@ -536,7 +536,7 @@ function MovingSequenceClickChallenge({ onComplete }) {
   const activeRef = useRef(true)
 
   const [nextExpected, setNextExpected] = useState(1)
-  const [timeLeft, setTimeLeft] = useState(9)
+  const [timeLeft, setTimeLeft] = useState(12)
   const [active, setActive] = useState(true)
   const [attempts, setAttempts] = useState(0)
   const [feedback, setFeedback] = useState('')
@@ -677,7 +677,7 @@ function MovingSequenceClickChallenge({ onComplete }) {
   const handleRetry = () => {
     targetsRef.current = makeTargets()
     setNextExpected(1)
-    setTimeLeft(9)
+    setTimeLeft(12)
     setActive(true)
     setFeedback('')
   }
