@@ -24,5 +24,3 @@ def get_db_config():
         "password": os.getenv("MYSQL_PASSWORD", ""),
         "port": int(os.getenv("MYSQL_PORT", "3306")),
     }
-
-

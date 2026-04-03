@@ -24,22 +24,43 @@ from rl_captcha.agent.ppo_lstm import PPOLSTM
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Train PPO+LSTM agent")
-    p.add_argument("--data-dir", type=str, default="data/",
-                    help="Path to data directory with human/ and bot/ subdirs")
-    p.add_argument("--save-path", type=str,
-                    default="rl_captcha/agent/checkpoints/ppo_run1",
-                    help="Directory to save checkpoints")
-    p.add_argument("--total-timesteps", type=int, default=None,
-                    help="Override total timesteps (default from PPOConfig)")
-    p.add_argument("--log-interval", type=int, default=1,
-                    help="Print stats every N rollouts")
-    p.add_argument("--save-interval", type=int, default=10,
-                    help="Save checkpoint every N rollouts")
-    p.add_argument("--val-episodes", type=int, default=100,
-                    help="Number of validation episodes per checkpoint")
+    p.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/",
+        help="Path to data directory with human/ and bot/ subdirs",
+    )
+    p.add_argument(
+        "--save-path",
+        type=str,
+        default="rl_captcha/agent/checkpoints/ppo_run1",
+        help="Directory to save checkpoints",
+    )
+    p.add_argument(
+        "--total-timesteps",
+        type=int,
+        default=None,
+        help="Override total timesteps (default from PPOConfig)",
+    )
+    p.add_argument(
+        "--log-interval", type=int, default=1, help="Print stats every N rollouts"
+    )
+    p.add_argument(
+        "--save-interval", type=int, default=10, help="Save checkpoint every N rollouts"
+    )
+    p.add_argument(
+        "--val-episodes",
+        type=int,
+        default=100,
+        help="Number of validation episodes per checkpoint",
+    )
     p.add_argument("--device", type=str, default="auto")
-    p.add_argument("--split-seed", type=int, default=42,
-                    help="Random seed for train/val/test split")
+    p.add_argument(
+        "--split-seed",
+        type=int,
+        default=42,
+        help="Random seed for train/val/test split",
+    )
     return p.parse_args()
 
 
@@ -63,12 +84,18 @@ def main():
     print(f"  Loaded {len(sessions)} sessions ({human_count} human, {bot_count} bot)")
 
     if not sessions:
-        print("ERROR: No sessions found. Place JSON files in data/human/ and data/bot/.")
+        print(
+            "ERROR: No sessions found. Place JSON files in data/human/ and data/bot/."
+        )
         return
 
     # Stratified 70/15/15 split
     train_sessions, val_sessions, test_sessions = split_sessions(
-        sessions, train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+        sessions,
+        train=0.70,
+        val=0.15,
+        test=0.15,
+        seed=args.split_seed,
     )
     h_tr, b_tr = _label_counts(train_sessions)
     h_va, b_va = _label_counts(val_sessions)
@@ -81,6 +108,7 @@ def main():
     train_env = EventEnv(train_sessions, config=cfg.event_env)
     if val_sessions:
         from dataclasses import replace
+
         val_cfg = replace(cfg.event_env, augment=False)
         val_env = EventEnv(val_sessions, config=val_cfg)
     else:
@@ -126,8 +154,12 @@ def main():
         # Logging
         if rollout_num % args.log_interval == 0:
             _print_rollout_stats(
-                rollout_num, num_rollouts, total_steps,
-                rollout_stats, update_metrics, t_elapsed,
+                rollout_num,
+                num_rollouts,
+                total_steps,
+                rollout_stats,
+                update_metrics,
+                t_elapsed,
             )
 
         # Save checkpoint + validation
@@ -137,7 +169,9 @@ def main():
 
             if val_env and args.val_episodes > 0:
                 val_acc = _quick_validate(val_env, agent, args.val_episodes)
-                print(f"  [Val accuracy: {val_acc:.3f} over {args.val_episodes} episodes]")
+                print(
+                    f"  [Val accuracy: {val_acc:.3f} over {args.val_episodes} episodes]"
+                )
             print()
 
     # Final save
@@ -168,7 +202,9 @@ def _quick_validate(env: EventEnv, agent: PPOLSTM, num_episodes: int) -> float:
         done = False
 
         while not done:
-            action, _, _ = agent.select_action(obs, action_mask=action_mask, deterministic=True)
+            action, _, _ = agent.select_action(
+                obs, action_mask=action_mask, deterministic=True
+            )
             obs, reward, terminated, truncated, step_info = env.step(action)
             done = terminated or truncated
             action_mask = step_info.get("action_mask")
@@ -214,7 +250,9 @@ def _collect_rollout(
         next_obs, reward, terminated, truncated, step_info = env.step(action)
         done = terminated or truncated
 
-        agent.buffer.push(obs, action, reward, done, log_prob, value, action_mask=action_mask)
+        agent.buffer.push(
+            obs, action, reward, done, log_prob, value, action_mask=action_mask
+        )
 
         ep_reward += reward
         ep_len += 1
@@ -269,18 +307,24 @@ def _print_rollout_stats(
     avg_windows = np.mean(ep_windows) if ep_windows else 0.0
     num_episodes = len(ep_rewards)
 
-    print(f"--- Rollout {rollout_num}/{num_rollouts} | "
-          f"Steps: {total_steps} | "
-          f"Time: {elapsed:.1f}s ---")
-    print(f"  Episodes: {num_episodes} | "
-          f"Avg reward: {avg_reward:.3f} | "
-          f"Avg length: {avg_length:.1f} | "
-          f"Avg windows: {avg_windows:.1f}")
+    print(
+        f"--- Rollout {rollout_num}/{num_rollouts} | "
+        f"Steps: {total_steps} | "
+        f"Time: {elapsed:.1f}s ---"
+    )
+    print(
+        f"  Episodes: {num_episodes} | "
+        f"Avg reward: {avg_reward:.3f} | "
+        f"Avg length: {avg_length:.1f} | "
+        f"Avg windows: {avg_windows:.1f}"
+    )
 
     if update_metrics:
-        print(f"  Policy loss: {update_metrics.get('policy_loss', 0):.4f} | "
-              f"Value loss: {update_metrics.get('value_loss', 0):.4f} | "
-              f"Entropy: {update_metrics.get('entropy', 0):.4f}")
+        print(
+            f"  Policy loss: {update_metrics.get('policy_loss', 0):.4f} | "
+            f"Value loss: {update_metrics.get('value_loss', 0):.4f} | "
+            f"Entropy: {update_metrics.get('entropy', 0):.4f}"
+        )
 
     # Outcome breakdown
     total_outcomes = sum(outcomes.values())

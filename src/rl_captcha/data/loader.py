@@ -30,6 +30,7 @@ class Session:
 # MySQL loader (reads the webapp's user_sessions table directly)
 # ---------------------------------------------------------------------------
 
+
 def load_from_mysql(
     config: DBConfig | None = None,
     limit: int = 10_000,
@@ -90,6 +91,7 @@ def load_from_mysql(
 # Chrome extension JSON export loader
 # ---------------------------------------------------------------------------
 
+
 def load_from_json(
     path: str | Path,
     label: int | None = 1,
@@ -138,6 +140,7 @@ def load_from_json(
 # Webapp CSV export loader
 # ---------------------------------------------------------------------------
 
+
 def load_from_csv(
     path: str | Path,
     label: int | None = 1,
@@ -169,6 +172,7 @@ def load_from_csv(
 # ---------------------------------------------------------------------------
 # Directory-based loaders (data/human/ and data/bot/)
 # ---------------------------------------------------------------------------
+
 
 def load_from_directory(
     data_dir: str | Path,
@@ -220,15 +224,17 @@ def _load_flexible_json(path: Path, label: int) -> list[Session]:
         # Flat array format: [{ session_id, mouse, clicks, ... }, ...]
         for item in data:
             sid = item.get("session_id", item.get("sessionId", f"unknown_{id(item)}"))
-            sessions.append(Session(
-                session_id=sid,
-                label=item.get("label", label),
-                mouse=_ensure_list(item.get("mouse")),
-                clicks=_ensure_list(item.get("clicks")),
-                keystrokes=_ensure_list(item.get("keystrokes")),
-                scroll=_ensure_list(item.get("scroll")),
-                metadata=item.get("metadata", {"source_file": str(path.name)}),
-            ))
+            sessions.append(
+                Session(
+                    session_id=sid,
+                    label=item.get("label", label),
+                    mouse=_ensure_list(item.get("mouse")),
+                    clicks=_ensure_list(item.get("clicks")),
+                    keystrokes=_ensure_list(item.get("keystrokes")),
+                    scroll=_ensure_list(item.get("scroll")),
+                    metadata=item.get("metadata", {"source_file": str(path.name)}),
+                )
+            )
     elif isinstance(data, dict):
         # Check if this is chrome extension format (keys are session IDs with
         # nested segments) or a single flat session object.
@@ -243,19 +249,21 @@ def _load_flexible_json(path: Path, label: int) -> list[Session]:
                     clicks.extend(seg.get("clicks", []))
                     keystrokes.extend(seg.get("keystrokes", []))
                     scroll.extend(seg.get("scroll", []))
-                sessions.append(Session(
-                    session_id=sid,
-                    label=label,
-                    mouse=mouse,
-                    clicks=clicks,
-                    keystrokes=keystrokes,
-                    scroll=scroll,
-                    metadata={
-                        "source": "chrome_extension",
-                        "source_file": str(path.name),
-                        "page_meta": session_data.get("pageMeta", []),
-                    },
-                ))
+                sessions.append(
+                    Session(
+                        session_id=sid,
+                        label=label,
+                        mouse=mouse,
+                        clicks=clicks,
+                        keystrokes=keystrokes,
+                        scroll=scroll,
+                        metadata={
+                            "source": "chrome_extension",
+                            "source_file": str(path.name),
+                            "page_meta": session_data.get("pageMeta", []),
+                        },
+                    )
+                )
         elif "segments" in data and isinstance(data.get("segments"), list):
             # Live-confirm / webapp export format:
             # { "sessionId": "...", "segments": [{ "mouse": [...], ... }] }
@@ -266,30 +274,34 @@ def _load_flexible_json(path: Path, label: int) -> list[Session]:
                 clicks.extend(seg.get("clicks", []))
                 keystrokes.extend(seg.get("keystrokes", []))
                 scroll.extend(seg.get("scroll", []))
-            sessions.append(Session(
-                session_id=sid,
-                label=data.get("label", label),
-                mouse=mouse,
-                clicks=clicks,
-                keystrokes=keystrokes,
-                scroll=scroll,
-                metadata={
-                    "source": data.get("source", "live_confirm"),
-                    "source_file": str(path.name),
-                },
-            ))
+            sessions.append(
+                Session(
+                    session_id=sid,
+                    label=data.get("label", label),
+                    mouse=mouse,
+                    clicks=clicks,
+                    keystrokes=keystrokes,
+                    scroll=scroll,
+                    metadata={
+                        "source": data.get("source", "live_confirm"),
+                        "source_file": str(path.name),
+                    },
+                )
+            )
         else:
             # Single flat session object
             sid = data.get("session_id", data.get("sessionId", path.stem))
-            sessions.append(Session(
-                session_id=sid,
-                label=data.get("label", label),
-                mouse=_ensure_list(data.get("mouse")),
-                clicks=_ensure_list(data.get("clicks")),
-                keystrokes=_ensure_list(data.get("keystrokes")),
-                scroll=_ensure_list(data.get("scroll")),
-                metadata=data.get("metadata", {"source_file": str(path.name)}),
-            ))
+            sessions.append(
+                Session(
+                    session_id=sid,
+                    label=data.get("label", label),
+                    mouse=_ensure_list(data.get("mouse")),
+                    clicks=_ensure_list(data.get("clicks")),
+                    keystrokes=_ensure_list(data.get("keystrokes")),
+                    scroll=_ensure_list(data.get("scroll")),
+                    metadata=data.get("metadata", {"source_file": str(path.name)}),
+                )
+            )
 
     return sessions
 
@@ -297,6 +309,7 @@ def _load_flexible_json(path: Path, label: int) -> list[Session]:
 # ---------------------------------------------------------------------------
 # Session slicing (for windowed feature extraction)
 # ---------------------------------------------------------------------------
+
 
 def slice_session(
     session: Session,
@@ -310,6 +323,7 @@ def slice_session(
     even if the 'up' timestamp exceeds t_end by up to *keystroke_up_extend_ms*.
     This prevents orphaned key-down events from losing their hold duration.
     """
+
     def _in_range(evt: dict) -> bool:
         t = evt.get("t", evt.get("timestamp", -1))
         return t_start <= t <= t_end
@@ -360,6 +374,7 @@ def slice_session(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _ensure_list(value: Any) -> list:
     """Coerce a value to a list."""
     if isinstance(value, list):
@@ -386,6 +401,7 @@ def _parse_json(value: Any) -> list | dict:
 # Train / validation / test splitting
 # ---------------------------------------------------------------------------
 
+
 def split_sessions(
     sessions: list[Session],
     train: float = 0.70,
@@ -405,7 +421,9 @@ def split_sessions(
     human = [s for s in sessions if s.label == 1]
     bot = [s for s in sessions if s.label == 0]
 
-    def _split_group(group: list[Session]) -> tuple[list[Session], list[Session], list[Session]]:
+    def _split_group(
+        group: list[Session],
+    ) -> tuple[list[Session], list[Session], list[Session]]:
         rng = _rng.Random(seed)
         shuffled = list(group)
         rng.shuffle(shuffled)

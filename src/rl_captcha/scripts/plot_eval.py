@@ -17,7 +17,9 @@ import numpy as np
 
 # ── Regex patterns matching evaluate_ppo.py output ─────────────────────
 
-RE_SPLIT = re.compile(r"Evaluating on (\w+) split:\s*(\d+) sessions \((\d+) human, (\d+) bot\)")
+RE_SPLIT = re.compile(
+    r"Evaluating on (\w+) split:\s*(\d+) sessions \((\d+) human, (\d+) bot\)"
+)
 RE_METRICS = re.compile(r"Accuracy:\s*([\d.]+)")
 RE_PRECISION = re.compile(r"Precision:\s*([\d.]+)")
 RE_RECALL = re.compile(r"Recall:\s*([\d.]+)")
@@ -63,14 +65,23 @@ def parse_log(path: str) -> dict:
                 result["human_sessions"] = int(m.group(3))
                 result["bot_sessions"] = int(m.group(4))
 
-            for name, regex in [("accuracy", RE_METRICS), ("precision", RE_PRECISION),
-                                 ("recall", RE_RECALL), ("f1", RE_F1)]:
+            for name, regex in [
+                ("accuracy", RE_METRICS),
+                ("precision", RE_PRECISION),
+                ("recall", RE_RECALL),
+                ("f1", RE_F1),
+            ]:
                 m = regex.search(raw)
                 if m:
                     result[name] = float(m.group(1))
 
-            for name, regex in [("tp", RE_TP), ("tn", RE_TN), ("fp", RE_FP),
-                                 ("fn", RE_FN), ("truncated", RE_TRUNC)]:
+            for name, regex in [
+                ("tp", RE_TP),
+                ("tn", RE_TN),
+                ("fp", RE_FP),
+                ("fn", RE_FN),
+                ("truncated", RE_TRUNC),
+            ]:
                 m = regex.search(raw)
                 if m:
                     result[name] = int(m.group(1))
@@ -116,16 +127,18 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
 
     split_name = result.get("split", "test").upper()
 
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.size": 11,
-        "axes.titlesize": 13,
-        "axes.labelsize": 12,
-        "legend.fontsize": 10,
-        "figure.dpi": 300,
-        "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.15,
-    })
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.size": 11,
+            "axes.titlesize": 13,
+            "axes.labelsize": 12,
+            "legend.fontsize": 10,
+            "figure.dpi": 300,
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.15,
+        }
+    )
 
     # ── 1. Confusion matrix heatmap ─────────────────────────────────
     tp = result.get("tp", 0)
@@ -148,8 +161,16 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
             val = cm[i, j]
             pct = cm_pct[i, j]
             color = "white" if pct > cm_pct.max() * 0.6 else "black"
-            ax.text(j, i, f"{val}\n({pct:.1f}%)", ha="center", va="center",
-                    fontsize=14, fontweight="bold", color=color)
+            ax.text(
+                j,
+                i,
+                f"{val}\n({pct:.1f}%)",
+                ha="center",
+                va="center",
+                fontsize=14,
+                fontweight="bold",
+                color=color,
+            )
     ax.set_title(f"Confusion Matrix — {split_name} Split")
     fig.colorbar(im, ax=ax, label="% of episodes", shrink=0.8)
     fig.savefig(out_dir / f"eval_confusion_matrix.{fmt}")
@@ -166,11 +187,20 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
         fig, ax = plt.subplots(figsize=(6, 4))
         names = list(metrics.keys())
         values = [metrics[n] for n in names]
-        colors = ["#3498db", "#2ecc71", "#e67e22", "#9b59b6"][:len(names)]
-        bars = ax.bar(names, values, color=colors, width=0.6, edgecolor="white", linewidth=1.5)
+        colors = ["#3498db", "#2ecc71", "#e67e22", "#9b59b6"][: len(names)]
+        bars = ax.bar(
+            names, values, color=colors, width=0.6, edgecolor="white", linewidth=1.5
+        )
         for bar, val in zip(bars, values):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                    f"{val:.3f}", ha="center", va="bottom", fontsize=12, fontweight="bold")
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{val:.3f}",
+                ha="center",
+                va="bottom",
+                fontsize=12,
+                fontweight="bold",
+            )
         ax.set_ylim(0, 1.15)
         ax.set_ylabel("Score")
         ax.set_title(f"Evaluation Metrics — {split_name} Split")
@@ -186,17 +216,28 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
         action_names = list(actions.keys())
         action_counts = [actions[a] for a in action_names]
         action_colors = {
-            "allow": "#2ecc71", "block": "#e74c3c",
-            "easy_puzzle": "#f1c40f", "medium_puzzle": "#e67e22", "hard_puzzle": "#d35400",
-            "continue": "#95a5a6", "deploy_honeypot": "#3498db",
+            "allow": "#2ecc71",
+            "block": "#e74c3c",
+            "easy_puzzle": "#f1c40f",
+            "medium_puzzle": "#e67e22",
+            "hard_puzzle": "#d35400",
+            "continue": "#95a5a6",
+            "deploy_honeypot": "#3498db",
         }
         colors = [action_colors.get(a, "#bdc3c7") for a in action_names]
-        bars = ax.barh(action_names, action_counts, color=colors, edgecolor="white", linewidth=1.2)
+        bars = ax.barh(
+            action_names, action_counts, color=colors, edgecolor="white", linewidth=1.2
+        )
         total_actions = sum(action_counts)
         for bar, count in zip(bars, action_counts):
             pct = count / total_actions * 100 if total_actions else 0
-            ax.text(bar.get_width() + total_actions * 0.01, bar.get_y() + bar.get_height() / 2,
-                    f"{count} ({pct:.1f}%)", va="center", fontsize=10)
+            ax.text(
+                bar.get_width() + total_actions * 0.01,
+                bar.get_y() + bar.get_height() / 2,
+                f"{count} ({pct:.1f}%)",
+                va="center",
+                fontsize=10,
+            )
         ax.set_xlabel("Count")
         ax.set_title(f"Final Action Distribution — {split_name} Split")
         ax.grid(True, axis="x", alpha=0.3)
@@ -211,11 +252,24 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
         fig, ax = plt.subplots(figsize=(5, 4))
         labels = ["Human", "Bot"]
         values = [human_steps, bot_steps]
-        bars = ax.bar(labels, values, color=["#3498db", "#e74c3c"], width=0.5,
-                      edgecolor="white", linewidth=1.5)
+        bars = ax.bar(
+            labels,
+            values,
+            color=["#3498db", "#e74c3c"],
+            width=0.5,
+            edgecolor="white",
+            linewidth=1.5,
+        )
         for bar, val in zip(bars, values):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.1,
-                    f"{val:.1f}", ha="center", va="bottom", fontsize=12, fontweight="bold")
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.1,
+                f"{val:.1f}",
+                ha="center",
+                va="bottom",
+                fontsize=12,
+                fontweight="bold",
+            )
         ax.set_ylabel("Avg Windows Before Decision")
         ax.set_title(f"Decision Timing — {split_name} Split")
         ax.grid(True, axis="y", alpha=0.3)
@@ -225,7 +279,12 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
 
     # ── 5. Combined 2×2 summary ─────────────────────────────────────
     fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-    fig.suptitle(f"Evaluation Summary — {split_name} Split", fontsize=15, fontweight="bold", y=0.98)
+    fig.suptitle(
+        f"Evaluation Summary — {split_name} Split",
+        fontsize=15,
+        fontweight="bold",
+        y=0.98,
+    )
 
     # (a) confusion matrix
     ax = axes[0, 0]
@@ -239,8 +298,16 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
             val = cm[i, j]
             pct = cm_pct[i, j]
             color = "white" if pct > cm_pct.max() * 0.6 else "black"
-            ax.text(j, i, f"{val}\n({pct:.1f}%)", ha="center", va="center",
-                    fontsize=12, fontweight="bold", color=color)
+            ax.text(
+                j,
+                i,
+                f"{val}\n({pct:.1f}%)",
+                ha="center",
+                va="center",
+                fontsize=12,
+                fontweight="bold",
+                color=color,
+            )
     ax.set_title("(a) Confusion Matrix")
 
     # (b) metrics
@@ -248,11 +315,18 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
     if metrics:
         names = list(metrics.keys())
         values = [metrics[n] for n in names]
-        colors = ["#3498db", "#2ecc71", "#e67e22", "#9b59b6"][:len(names)]
+        colors = ["#3498db", "#2ecc71", "#e67e22", "#9b59b6"][: len(names)]
         bars = ax.bar(names, values, color=colors, width=0.6)
         for bar, val in zip(bars, values):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                    f"{val:.3f}", ha="center", va="bottom", fontsize=11, fontweight="bold")
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{val:.3f}",
+                ha="center",
+                va="bottom",
+                fontsize=11,
+                fontweight="bold",
+            )
         ax.set_ylim(0, 1.15)
     ax.set_title("(b) Metrics")
     ax.grid(True, axis="y", alpha=0.3)
@@ -271,10 +345,16 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
     # (d) timing
     ax = axes[1, 1]
     if human_steps is not None and bot_steps is not None:
-        ax.bar(["Human", "Bot"], [human_steps, bot_steps],
-               color=["#3498db", "#e74c3c"], width=0.5)
+        ax.bar(
+            ["Human", "Bot"],
+            [human_steps, bot_steps],
+            color=["#3498db", "#e74c3c"],
+            width=0.5,
+        )
         for i, val in enumerate([human_steps, bot_steps]):
-            ax.text(i, val + 0.1, f"{val:.1f}", ha="center", fontsize=11, fontweight="bold")
+            ax.text(
+                i, val + 0.1, f"{val:.1f}", ha="center", fontsize=11, fontweight="bold"
+            )
     ax.set_ylabel("Avg Windows")
     ax.set_title("(d) Decision Timing")
     ax.grid(True, axis="y", alpha=0.3)
@@ -289,10 +369,19 @@ def plot_all(result: dict, out_dir: Path, fmt: str = "png"):
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize PPO evaluation results")
-    parser.add_argument("--log", type=str, required=True, help="Path to evaluation log file")
-    parser.add_argument("--out", type=str, default="figures", help="Output directory for figures")
-    parser.add_argument("--format", type=str, default="png", choices=["png", "pdf", "svg"],
-                        help="Figure format (pdf recommended for papers)")
+    parser.add_argument(
+        "--log", type=str, required=True, help="Path to evaluation log file"
+    )
+    parser.add_argument(
+        "--out", type=str, default="figures", help="Output directory for figures"
+    )
+    parser.add_argument(
+        "--format",
+        type=str,
+        default="png",
+        choices=["png", "pdf", "svg"],
+        help="Figure format (pdf recommended for papers)",
+    )
     args = parser.parse_args()
 
     log_path = Path(args.log)
@@ -307,9 +396,11 @@ def main():
         print("No evaluation data found in log file.")
         return
 
-    print(f"Split: {result.get('split', 'unknown')} | "
-          f"Accuracy: {result.get('accuracy', 0):.3f} | "
-          f"F1: {result.get('f1', 0):.3f}")
+    print(
+        f"Split: {result.get('split', 'unknown')} | "
+        f"Accuracy: {result.get('accuracy', 0):.3f} | "
+        f"F1: {result.get('f1', 0):.3f}"
+    )
     plot_all(result, Path(args.out), fmt=args.format)
 
 

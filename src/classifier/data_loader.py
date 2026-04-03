@@ -82,13 +82,17 @@ def _load_json_file(path: Path, label: int) -> list[Session]:
                 clicks = _ensure_list(item.get("clicks"))
                 keystrokes = _ensure_list(item.get("keystrokes"))
                 scroll = _ensure_list(item.get("scroll"))
-            sessions.append(Session(
-                session_id=sid,
-                label=item.get("label", label),
-                mouse=mouse, clicks=clicks,
-                keystrokes=keystrokes, scroll=scroll,
-                metadata={"source_file": path.name},
-            ))
+            sessions.append(
+                Session(
+                    session_id=sid,
+                    label=item.get("label", label),
+                    mouse=mouse,
+                    clicks=clicks,
+                    keystrokes=keystrokes,
+                    scroll=scroll,
+                    metadata={"source_file": path.name},
+                )
+            )
 
     elif isinstance(data, dict):
         first_val = next(iter(data.values()), None) if data else None
@@ -99,13 +103,20 @@ def _load_json_file(path: Path, label: int) -> list[Session]:
                 mouse, clicks, keystrokes, scroll = _merge_segments(
                     session_data.get("segments", [])
                 )
-                sessions.append(Session(
-                    session_id=sid,
-                    label=label,
-                    mouse=mouse, clicks=clicks,
-                    keystrokes=keystrokes, scroll=scroll,
-                    metadata={"source": "chrome_extension", "source_file": path.name},
-                ))
+                sessions.append(
+                    Session(
+                        session_id=sid,
+                        label=label,
+                        mouse=mouse,
+                        clicks=clicks,
+                        keystrokes=keystrokes,
+                        scroll=scroll,
+                        metadata={
+                            "source": "chrome_extension",
+                            "source_file": path.name,
+                        },
+                    )
+                )
         else:
             # Format 1 or 2: single session object
             sid = data.get("session_id", data.get("sessionId", path.stem))
@@ -116,13 +127,17 @@ def _load_json_file(path: Path, label: int) -> list[Session]:
                 clicks = _ensure_list(data.get("clicks"))
                 keystrokes = _ensure_list(data.get("keystrokes"))
                 scroll = _ensure_list(data.get("scroll"))
-            sessions.append(Session(
-                session_id=sid,
-                label=data.get("label", label),
-                mouse=mouse, clicks=clicks,
-                keystrokes=keystrokes, scroll=scroll,
-                metadata={"source_file": path.name},
-            ))
+            sessions.append(
+                Session(
+                    session_id=sid,
+                    label=data.get("label", label),
+                    mouse=mouse,
+                    clicks=clicks,
+                    keystrokes=keystrokes,
+                    scroll=scroll,
+                    metadata={"source_file": path.name},
+                )
+            )
 
     return sessions
 

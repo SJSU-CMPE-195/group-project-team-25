@@ -28,9 +28,9 @@ class DBConfig:
 class FeatureConfig:
     """Feature extraction parameters for the session-level classifier."""
 
-    mouse_speed_cap: float = 10_000.0      # px/s — clamp extreme speeds
-    jitter_threshold: float = 3.0          # px — movements below this are jitter
-    pause_threshold_ms: float = 500.0      # ms — gaps longer than this count as pauses
+    mouse_speed_cap: float = 10_000.0  # px/s — clamp extreme speeds
+    jitter_threshold: float = 3.0  # px — movements below this are jitter
+    pause_threshold_ms: float = 500.0  # ms — gaps longer than this count as pauses
 
 
 @dataclass
@@ -44,25 +44,25 @@ class ClassifierConfig:
     """
 
     n_estimators: int = 50
-    max_depth: int = 2                     # very shallow trees reduce overfitting
-    learning_rate: float = 0.05            # slow learning + early stopping
-    subsample: float = 0.7                 # row subsampling per tree
-    colsample_bytree: float = 0.7          # feature subsampling per tree
-    min_child_weight: int = 5              # prevent leaf nodes with few samples
-    reg_alpha: float = 0.3                 # L1 regularization
-    reg_lambda: float = 2.0                # L2 regularization
-    gamma: float = 0.3                     # min loss reduction for a split
+    max_depth: int = 2  # very shallow trees reduce overfitting
+    learning_rate: float = 0.05  # slow learning + early stopping
+    subsample: float = 0.7  # row subsampling per tree
+    colsample_bytree: float = 0.7  # feature subsampling per tree
+    min_child_weight: int = 5  # prevent leaf nodes with few samples
+    reg_alpha: float = 0.3  # L1 regularization
+    reg_lambda: float = 2.0  # L2 regularization
+    gamma: float = 0.3  # min loss reduction for a split
     eval_metric: str = "logloss"
     early_stopping_rounds: int = 20
     random_state: int = 42
 
     # Label smoothing: shift hard 0/1 labels toward 0.5 to encourage
     # calibrated probability outputs and reduce overconfidence.
-    label_smooth_alpha: float = 0.05       # 0→0.05, 1→0.95
+    label_smooth_alpha: float = 0.05  # 0→0.05, 1→0.95
 
     # Feature noise augmentation: add Gaussian noise to training features
     # to simulate data variation and prevent reliance on exact values.
-    feature_noise_std: float = 0.5          # std of noise relative to feature std
+    feature_noise_std: float = 0.5  # std of noise relative to feature std
 
 
 @dataclass
@@ -88,23 +88,23 @@ class EventEnvConfig:
     """
 
     # Event encoding
-    event_dim: int = 26               # windowed feature vector dimension
-    mouse_subsample: int = 5          # keep every Nth mouse event (66Hz → ~13Hz)
-    window_size: int = 30             # events per observation window
+    event_dim: int = 26  # windowed feature vector dimension
+    mouse_subsample: int = 5  # keep every Nth mouse event (66Hz → ~13Hz)
+    window_size: int = 30  # events per observation window
 
     # Session limits
-    min_events: int = 10              # skip sessions with fewer events
+    min_events: int = 10  # skip sessions with fewer events
 
     # Action costs
     action_costs: list[float] = field(
         default_factory=lambda: [
-            0.0,    # continue
-            0.01,   # deploy_honeypot
-            0.1,    # easy_puzzle
-            0.3,    # medium_puzzle
-            0.5,    # hard_puzzle
-            0.0,    # allow
-            0.0,    # block
+            0.0,  # continue
+            0.01,  # deploy_honeypot
+            0.1,  # easy_puzzle
+            0.3,  # medium_puzzle
+            0.5,  # hard_puzzle
+            0.0,  # allow
+            0.0,  # block
         ]
     )
 
@@ -113,7 +113,7 @@ class EventEnvConfig:
     reward_correct_allow: float = 0.5
     penalty_false_positive: float = -1.0
     penalty_false_negative: float = -0.8
-    continue_penalty: float = 0.001      # tiny per-window time pressure
+    continue_penalty: float = 0.001  # tiny per-window time pressure
     honeypot_info_bonus: float = 0.3
     truncation_penalty: float = -0.5
     max_honeypots: int = 2
@@ -121,9 +121,9 @@ class EventEnvConfig:
     # Puzzle pass rates: {action_index: (human_pass, bot_pass)}
     puzzle_pass_rates: dict = field(
         default_factory=lambda: {
-            2: (0.95, 0.40),   # easy
-            3: (0.85, 0.15),   # medium
-            4: (0.70, 0.05),   # hard
+            2: (0.95, 0.40),  # easy
+            3: (0.85, 0.15),  # medium
+            4: (0.70, 0.05),  # hard
         }
     )
 
@@ -132,18 +132,18 @@ class EventEnvConfig:
     honeypot_trigger_rate_human: float = 0.01
 
     # Data augmentation (applied to BOT sessions only, per-episode during training)
-    augment: bool = True              # enable stochastic augmentation
-    augment_prob: float = 0.5         # probability of augmenting each bot episode
-    aug_position_noise_std: float = 15.0   # Gaussian noise on x/y coords (px)
-    aug_timing_jitter_std: float = 30.0    # Gaussian noise on timestamps (ms)
+    augment: bool = True  # enable stochastic augmentation
+    augment_prob: float = 0.5  # probability of augmenting each bot episode
+    aug_position_noise_std: float = 15.0  # Gaussian noise on x/y coords (px)
+    aug_timing_jitter_std: float = 30.0  # Gaussian noise on timestamps (ms)
     aug_speed_warp_range: tuple = (0.7, 1.4)  # random time stretch/compress
 
     # Normalization constants for event encoding
     max_coord_x: float = 1920.0
     max_coord_y: float = 1080.0
     max_dt_ms: float = 5000.0
-    max_speed: float = 5000.0        # px/s
-    max_scroll_dy: float = 500.0     # px
+    max_speed: float = 5000.0  # px/s
+    max_scroll_dy: float = 500.0  # px
 
 
 @dataclass

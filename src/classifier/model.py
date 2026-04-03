@@ -106,7 +106,11 @@ class HumanLikelihoodClassifier:
         if cfg.feature_noise_std > 0:
             rng = np.random.RandomState(cfg.random_state)
             feature_stds = np.std(X_train, axis=0)
-            noise = rng.normal(0, 1, size=X_train.shape) * feature_stds * cfg.feature_noise_std
+            noise = (
+                rng.normal(0, 1, size=X_train.shape)
+                * feature_stds
+                * cfg.feature_noise_std
+            )
             X_train = X_train + noise
 
         y_train = np.array(y, dtype=int)
@@ -128,7 +132,9 @@ class HumanLikelihoodClassifier:
             reg_lambda=cfg.reg_lambda,
             gamma=cfg.gamma,
             eval_metric=cfg.eval_metric,
-            early_stopping_rounds=cfg.early_stopping_rounds if X_val is not None else None,
+            early_stopping_rounds=(
+                cfg.early_stopping_rounds if X_val is not None else None
+            ),
             random_state=cfg.random_state,
         )
 
@@ -193,7 +199,9 @@ class HumanLikelihoodClassifier:
         importances = self._model.feature_importances_
         if feature_names is None:
             feature_names = [f"f{i}" for i in range(len(importances))]
-        pairs = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+        pairs = sorted(
+            zip(feature_names, importances), key=lambda x: x[1], reverse=True
+        )
         return {name: round(float(score), 6) for name, score in pairs}
 
     # ------------------------------------------------------------------
@@ -222,7 +230,7 @@ class HumanLikelihoodClassifier:
     def load(cls, directory: str | Path) -> "HumanLikelihoodClassifier":
         """Load a saved classifier from *directory*."""
         directory = Path(directory)
-        model_path  = directory / cls.MODEL_FILENAME
+        model_path = directory / cls.MODEL_FILENAME
         config_path = directory / cls.CONFIG_FILENAME
 
         if not model_path.exists():
@@ -248,9 +256,7 @@ class HumanLikelihoodClassifier:
 
     def _check_fitted(self) -> None:
         if not self._is_fitted or self._model is None:
-            raise RuntimeError(
-                "Classifier is not fitted. Call fit() or load() first."
-            )
+            raise RuntimeError("Classifier is not fitted. Call fit() or load() first.")
 
     def __repr__(self) -> str:
         status = "fitted" if self._is_fitted else "not fitted"

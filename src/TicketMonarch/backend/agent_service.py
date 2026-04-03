@@ -72,7 +72,9 @@ class AgentService:
             print(f"[AgentService] Loaded checkpoint from {checkpoint_path}")
         else:
             self._loaded = False
-            print(f"[AgentService] WARNING: No checkpoint at {checkpoint_path}, agent will allow all")
+            print(
+                f"[AgentService] WARNING: No checkpoint at {checkpoint_path}, agent will allow all"
+            )
 
     def _build_windows(self, session: Session) -> tuple[list[dict], list[list[dict]]]:
         """Build timeline and split into overlapping windows."""
@@ -83,7 +85,7 @@ class AgentService:
         stride = ws // 2
         windows = []
         for start in range(0, len(timeline), stride):
-            window = timeline[start:start + ws]
+            window = timeline[start : start + ws]
             if len(window) >= self.env_config.min_events:
                 windows.append(window)
 
@@ -103,10 +105,14 @@ class AgentService:
         """
         if not self._loaded:
             return {
-                "decision": "allow", "action_index": 5,
-                "events_processed": 0, "total_events": 0,
-                "action_history": [], "final_probs": [0] * 7,
-                "final_value": 0.0, "reason": "no_checkpoint",
+                "decision": "allow",
+                "action_index": 5,
+                "events_processed": 0,
+                "total_events": 0,
+                "action_history": [],
+                "final_probs": [0] * 7,
+                "final_value": 0.0,
+                "reason": "no_checkpoint",
             }
 
         encoder = EventEncoder(self.env_config)
@@ -114,10 +120,14 @@ class AgentService:
 
         if not windows:
             return {
-                "decision": "allow", "action_index": 5,
-                "events_processed": len(timeline), "total_events": len(timeline),
-                "action_history": [], "final_probs": [0] * 7,
-                "final_value": 0.0, "reason": "too_few_events",
+                "decision": "allow",
+                "action_index": 5,
+                "events_processed": len(timeline),
+                "total_events": len(timeline),
+                "action_history": [],
+                "final_probs": [0] * 7,
+                "final_value": 0.0,
+                "reason": "too_few_events",
             }
 
         self.agent.reset_hidden()
@@ -125,29 +135,35 @@ class AgentService:
 
         with torch.no_grad():
             for i, window in enumerate(windows):
-                is_final = (i == len(windows) - 1)
+                is_final = i == len(windows) - 1
                 mask = FINAL_MASK if is_final else NON_FINAL_MASK
-                mask_t = torch.from_numpy(mask).float().unsqueeze(0).to(self.agent.device)
+                mask_t = (
+                    torch.from_numpy(mask).float().unsqueeze(0).to(self.agent.device)
+                )
 
                 obs = encoder.encode_window(window)
                 obs_t = torch.from_numpy(obs).float().unsqueeze(0).to(self.agent.device)
                 h, c = self.agent.get_hidden()
 
-                logits, values, new_hidden = self.agent.network(obs_t, (h, c), action_mask=mask_t)
+                logits, values, new_hidden = self.agent.network(
+                    obs_t, (h, c), action_mask=mask_t
+                )
                 probs = F.softmax(logits, dim=-1).cpu().numpy().squeeze()
                 value = float(values.squeeze().item())
                 action = int(np.argmax(probs))
                 self.agent._hidden = new_hidden
 
-                action_history.append({
-                    "window_idx": i,
-                    "window_events": len(window),
-                    "action": ACTION_NAMES[action],
-                    "action_index": action,
-                    "probs": [round(float(p), 4) for p in probs],
-                    "value": round(value, 4),
-                    "is_final": is_final,
-                })
+                action_history.append(
+                    {
+                        "window_idx": i,
+                        "window_events": len(window),
+                        "action": ACTION_NAMES[action],
+                        "action_index": action,
+                        "probs": [round(float(p), 4) for p in probs],
+                        "value": round(value, 4),
+                        "is_final": is_final,
+                    }
+                )
 
         last = action_history[-1]
         final_probs_arr = np.array(last["probs"])
@@ -182,13 +198,21 @@ class AgentService:
     def _rolling_evaluate(self, session: Session) -> dict:
         """Process all windows with masking, return bot probability."""
         if not self._loaded:
-            return {"bot_probability": 0.0, "deploy_honeypot": False, "events_processed": 0}
+            return {
+                "bot_probability": 0.0,
+                "deploy_honeypot": False,
+                "events_processed": 0,
+            }
 
         encoder = EventEncoder(self.env_config)
         timeline, windows = self._build_windows(session)
 
         if not windows:
-            return {"bot_probability": 0.0, "deploy_honeypot": False, "events_processed": len(timeline)}
+            return {
+                "bot_probability": 0.0,
+                "deploy_honeypot": False,
+                "events_processed": len(timeline),
+            }
 
         self.agent.reset_hidden()
         deploy_honeypot = False
@@ -196,15 +220,19 @@ class AgentService:
 
         with torch.no_grad():
             for i, window in enumerate(windows):
-                is_final = (i == len(windows) - 1)
+                is_final = i == len(windows) - 1
                 mask = FINAL_MASK if is_final else NON_FINAL_MASK
-                mask_t = torch.from_numpy(mask).float().unsqueeze(0).to(self.agent.device)
+                mask_t = (
+                    torch.from_numpy(mask).float().unsqueeze(0).to(self.agent.device)
+                )
 
                 obs = encoder.encode_window(window)
                 obs_t = torch.from_numpy(obs).float().unsqueeze(0).to(self.agent.device)
                 h, c = self.agent.get_hidden()
 
-                logits, _, new_hidden = self.agent.network(obs_t, (h, c), action_mask=mask_t)
+                logits, _, new_hidden = self.agent.network(
+                    obs_t, (h, c), action_mask=mask_t
+                )
                 probs = F.softmax(logits, dim=-1).cpu().numpy().squeeze()
                 action = int(np.argmax(probs))
                 self.agent._hidden = new_hidden
@@ -227,8 +255,7 @@ class AgentService:
             "events_processed": len(timeline),
             "num_windows": len(windows),
             "action_distribution": {
-                ACTION_NAMES[i]: round(float(last_probs[i]), 4)
-                for i in range(7)
+                ACTION_NAMES[i]: round(float(last_probs[i]), 4) for i in range(7)
             },
         }
 
@@ -252,8 +279,11 @@ class AgentService:
         timeline, windows = self._build_windows(session)
 
         if not windows:
-            return {"updated": False, "reason": "too_few_events",
-                    "event_count": len(timeline)}
+            return {
+                "updated": False,
+                "reason": "too_few_events",
+                "event_count": len(timeline),
+            }
 
         cfg = self.env_config
         label_str = "human" if true_label == 1 else "bot"
@@ -268,7 +298,7 @@ class AgentService:
         original_lr = self.agent.config.lr
         online_lr = original_lr * 0.6
         for pg in self.agent.optimizer.param_groups:
-            pg['lr'] = online_lr
+            pg["lr"] = online_lr
 
         original_epochs = self.agent.config.num_epochs
         self.agent.config.num_epochs = 3
@@ -279,7 +309,7 @@ class AgentService:
 
         # replay all windows with proper action masking
         for i, obs in enumerate(obs_list):
-            is_last = (i == len(obs_list) - 1)
+            is_last = i == len(obs_list) - 1
             mask = FINAL_MASK if is_last else NON_FINAL_MASK
 
             action, log_prob, value = self.agent.select_action(obs, action_mask=mask)
@@ -287,11 +317,23 @@ class AgentService:
             if is_last:
                 # terminal reward based on true label
                 if action == 5:  # allow
-                    reward = cfg.reward_correct_allow if true_label == 1 else cfg.penalty_false_negative
+                    reward = (
+                        cfg.reward_correct_allow
+                        if true_label == 1
+                        else cfg.penalty_false_negative
+                    )
                 elif action == 6:  # block
-                    reward = cfg.reward_correct_block if true_label == 0 else cfg.penalty_false_positive
+                    reward = (
+                        cfg.reward_correct_block
+                        if true_label == 0
+                        else cfg.penalty_false_positive
+                    )
                 elif action in (2, 3, 4):  # puzzle
-                    reward = cfg.penalty_false_positive * 0.7 if true_label == 1 else cfg.reward_correct_block * 0.9
+                    reward = (
+                        cfg.penalty_false_positive * 0.7
+                        if true_label == 1
+                        else cfg.reward_correct_block * 0.9
+                    )
                 else:
                     reward = -0.3  # should not happen with masking
                 done = True
@@ -299,7 +341,9 @@ class AgentService:
                 reward = -cfg.continue_penalty
                 done = False
 
-            self.agent.buffer.push(obs, action, reward, done, log_prob, value, action_mask=mask)
+            self.agent.buffer.push(
+                obs, action, reward, done, log_prob, value, action_mask=mask
+            )
 
         self.agent.buffer.compute_gae(
             last_value=0.0,
@@ -312,7 +356,7 @@ class AgentService:
         # restore settings
         self.agent.config.num_epochs = original_epochs
         for pg in self.agent.optimizer.param_groups:
-            pg['lr'] = original_lr
+            pg["lr"] = original_lr
 
         self.agent.network.eval()
 
@@ -320,23 +364,37 @@ class AgentService:
         after = self._evaluate_session(session)
 
         self._online_update_count += 1
-        before_correct = (before["decision"] == "allow" and true_label == 1) or \
-                         (before["decision"] != "allow" and true_label == 0)
-        after_correct = (after["decision"] == "allow" and true_label == 1) or \
-                        (after["decision"] != "allow" and true_label == 0)
+        before_correct = (before["decision"] == "allow" and true_label == 1) or (
+            before["decision"] != "allow" and true_label == 0
+        )
+        after_correct = (after["decision"] == "allow" and true_label == 1) or (
+            after["decision"] != "allow" and true_label == 0
+        )
 
-        improvement = "IMPROVED" if (not before_correct and after_correct) else \
-                      "REGRESSED" if (before_correct and not after_correct) else \
-                      "UNCHANGED"
+        improvement = (
+            "IMPROVED"
+            if (not before_correct and after_correct)
+            else "REGRESSED" if (before_correct and not after_correct) else "UNCHANGED"
+        )
 
         self.agent.save(self.checkpoint_path)
 
         log = self._online_logger
-        log.info(f"--- Online Update #{self._online_update_count} | {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')} ---")
-        log.info(f"  True label: {label_str} | Events: {len(timeline)} | Windows: {len(windows)}")
-        log.info(f"  BEFORE: decision={before['decision']} p_allow={before.get('p_allow', 0):.4f} p_suspicious={before.get('p_suspicious', 0):.4f} {'CORRECT' if before_correct else 'WRONG'}")
-        log.info(f"  AFTER:  decision={after['decision']} p_allow={after.get('p_allow', 0):.4f} p_suspicious={after.get('p_suspicious', 0):.4f} {'CORRECT' if after_correct else 'WRONG'}")
-        log.info(f"  Result: {improvement} | Policy loss: {metrics.get('policy_loss', 0):.4f} | Value loss: {metrics.get('value_loss', 0):.4f}")
+        log.info(
+            f"--- Online Update #{self._online_update_count} | {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')} ---"
+        )
+        log.info(
+            f"  True label: {label_str} | Events: {len(timeline)} | Windows: {len(windows)}"
+        )
+        log.info(
+            f"  BEFORE: decision={before['decision']} p_allow={before.get('p_allow', 0):.4f} p_suspicious={before.get('p_suspicious', 0):.4f} {'CORRECT' if before_correct else 'WRONG'}"
+        )
+        log.info(
+            f"  AFTER:  decision={after['decision']} p_allow={after.get('p_allow', 0):.4f} p_suspicious={after.get('p_suspicious', 0):.4f} {'CORRECT' if after_correct else 'WRONG'}"
+        )
+        log.info(
+            f"  Result: {improvement} | Policy loss: {metrics.get('policy_loss', 0):.4f} | Value loss: {metrics.get('value_loss', 0):.4f}"
+        )
         log.info("")
 
         return {

@@ -34,7 +34,9 @@ def create_database_if_not_exists():
     conn = mysql.connector.connect(**admin_config)
     cursor = conn.cursor()
 
-    cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{db_name}` DEFAULT CHARACTER SET utf8mb4")
+    cursor.execute(
+        f"CREATE DATABASE IF NOT EXISTS `{db_name}` DEFAULT CHARACTER SET utf8mb4"
+    )
     conn.commit()
 
     cursor.close()
@@ -50,8 +52,7 @@ def create_orders_table():
     conn = mysql.connector.connect(**config)
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             id INT AUTO_INCREMENT PRIMARY KEY,
             customer_name VARCHAR(100) NOT NULL,
@@ -62,8 +63,7 @@ def create_orders_table():
             total DECIMAL(10, 2) NOT NULL,
             order_date DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-        """
-    )
+        """)
 
     conn.commit()
     cursor.close()
@@ -78,8 +78,7 @@ def create_user_sessions_table():
     conn = mysql.connector.connect(**config)
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_sessions (
             session_id VARCHAR(64) PRIMARY KEY,
             session_start DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -92,17 +91,14 @@ def create_user_sessions_table():
             browser_info JSON,
             session_metadata JSON
         )
-        """
-    )
+        """)
 
     # Index on session_start for fast ORDER BY DESC LIMIT queries
     try:
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE INDEX idx_session_start
             ON user_sessions (session_start DESC)
-            """
-        )
+            """)
     except Exception:
         pass  # Index already exists
 
@@ -120,5 +116,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

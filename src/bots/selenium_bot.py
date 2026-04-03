@@ -35,21 +35,68 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-
 SITE_URL = "http://localhost:3000"
 API_URL = "http://localhost:5000"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "bot"
 
 # Realistic fake identities for varied runs
 FAKE_PEOPLE = [
-    {"full_name": "Maria Gonzalez", "billing_address": "742 Evergreen Terrace", "city": "San Jose", "zip_code": "95112", "state": "California"},
-    {"full_name": "James Chen", "billing_address": "1600 Amphitheatre Pkwy", "city": "Mountain View", "zip_code": "94043", "state": "California"},
-    {"full_name": "Sarah Johnson", "billing_address": "350 Fifth Avenue", "city": "New York", "zip_code": "10118", "state": "New York"},
-    {"full_name": "David Kim", "billing_address": "233 S Wacker Dr", "city": "Chicago", "zip_code": "60606", "state": "Illinois"},
-    {"full_name": "Emily Davis", "billing_address": "600 Navarro St", "city": "San Antonio", "zip_code": "78205", "state": "Texas"},
-    {"full_name": "Michael Brown", "billing_address": "1 Infinite Loop", "city": "Cupertino", "zip_code": "95014", "state": "California"},
-    {"full_name": "Jessica Wilson", "billing_address": "100 Universal City Plz", "city": "Universal City", "zip_code": "91608", "state": "California"},
-    {"full_name": "Robert Martinez", "billing_address": "1901 Main St", "city": "Dallas", "zip_code": "75201", "state": "Texas"},
+    {
+        "full_name": "Maria Gonzalez",
+        "billing_address": "742 Evergreen Terrace",
+        "city": "San Jose",
+        "zip_code": "95112",
+        "state": "California",
+    },
+    {
+        "full_name": "James Chen",
+        "billing_address": "1600 Amphitheatre Pkwy",
+        "city": "Mountain View",
+        "zip_code": "94043",
+        "state": "California",
+    },
+    {
+        "full_name": "Sarah Johnson",
+        "billing_address": "350 Fifth Avenue",
+        "city": "New York",
+        "zip_code": "10118",
+        "state": "New York",
+    },
+    {
+        "full_name": "David Kim",
+        "billing_address": "233 S Wacker Dr",
+        "city": "Chicago",
+        "zip_code": "60606",
+        "state": "Illinois",
+    },
+    {
+        "full_name": "Emily Davis",
+        "billing_address": "600 Navarro St",
+        "city": "San Antonio",
+        "zip_code": "78205",
+        "state": "Texas",
+    },
+    {
+        "full_name": "Michael Brown",
+        "billing_address": "1 Infinite Loop",
+        "city": "Cupertino",
+        "zip_code": "95014",
+        "state": "California",
+    },
+    {
+        "full_name": "Jessica Wilson",
+        "billing_address": "100 Universal City Plz",
+        "city": "Universal City",
+        "zip_code": "91608",
+        "state": "California",
+    },
+    {
+        "full_name": "Robert Martinez",
+        "billing_address": "1901 Main St",
+        "city": "Dallas",
+        "zip_code": "75201",
+        "state": "Texas",
+    },
 ]
 
 CARD_NUMBERS = ["4111111111111111", "4242424242424242", "5500000000000004"]
@@ -95,6 +142,7 @@ def wait_for_url(driver, url_contains, timeout=10):
 # ---------------------------------------------------------------------------
 # Human-like typing helpers
 # ---------------------------------------------------------------------------
+
 
 def _type_human(element, text):
     """Type with human-like timing: variable inter-key delays, occasional pauses,
@@ -149,6 +197,7 @@ def _type_uniform(element, text):
 # Human-like mouse movement helpers
 # ---------------------------------------------------------------------------
 
+
 def _human_move_and_click(driver, element, click_only=False):
     """Move to element with natural-looking curve, micro-corrections, and click."""
     if click_only:
@@ -159,8 +208,8 @@ def _human_move_and_click(driver, element, click_only=False):
     # Get current mouse position (approximate via element location)
     loc = element.location
     size = element.size
-    target_x = loc['x'] + size['width'] / 2
-    target_y = loc['y'] + size['height'] / 2
+    target_x = loc["x"] + size["width"] / 2
+    target_y = loc["y"] + size["height"] / 2
 
     # Multi-step approach with Bezier-like curve
     steps = random.randint(10, 25)
@@ -281,7 +330,9 @@ def _idle_fidget(driver, duration: float = None):
             arc_steps = random.randint(6, 12)
             start_angle = random.uniform(0, 2 * math.pi)
             for i in range(arc_steps):
-                angle = start_angle + (i / arc_steps) * math.pi * random.uniform(0.5, 1.5)
+                angle = start_angle + (i / arc_steps) * math.pi * random.uniform(
+                    0.5, 1.5
+                )
                 dx = int(radius * math.cos(angle) / arc_steps * 2)
                 dy = int(radius * math.sin(angle) / arc_steps * 2)
                 if dx != 0 or dy != 0:
@@ -334,6 +385,7 @@ def _human_scroll(driver, scrolls: int = 3):
 # ---------------------------------------------------------------------------
 # Shared multi-page flow steps
 # ---------------------------------------------------------------------------
+
 
 def _go_home(driver):
     """Navigate to the home page and wait for concert cards to load."""
@@ -393,7 +445,9 @@ def _handle_challenge(driver, move_fn, max_retries=3):
         time.sleep(0.5)
 
         # Try the "Go Back" button (blocked state)
-        go_back = driver.find_elements(By.CSS_SELECTOR, ".challenge-overlay .challenge-btn")
+        go_back = driver.find_elements(
+            By.CSS_SELECTOR, ".challenge-overlay .challenge-btn"
+        )
         if go_back:
             # Check if it's a simple "Go Back" button (blocked)
             btn_text = go_back[0].text.strip().lower()
@@ -411,12 +465,13 @@ def _handle_challenge(driver, move_fn, max_retries=3):
                 track = slider_thumb[0]
                 track_size = track.size
                 # Click somewhere on the track (random position — will probably miss)
-                ActionChains(driver) \
-                    .move_to_element_with_offset(track, int(track_size['width'] * random.uniform(0.2, 0.8)), int(track_size['height'] / 2)) \
-                    .click_and_hold() \
-                    .move_by_offset(int(track_size['width'] * random.uniform(-0.3, 0.3)), 0) \
-                    .release() \
-                    .perform()
+                ActionChains(driver).move_to_element_with_offset(
+                    track,
+                    int(track_size["width"] * random.uniform(0.2, 0.8)),
+                    int(track_size["height"] / 2),
+                ).click_and_hold().move_by_offset(
+                    int(track_size["width"] * random.uniform(-0.3, 0.3)), 0
+                ).release().perform()
                 time.sleep(1)
             except Exception as e:
                 print(f"  Slider attempt failed: {e}")
@@ -430,9 +485,11 @@ def _handle_challenge(driver, move_fn, max_retries=3):
                 inp = captcha_input[0]
                 inp.clear()
                 # Type a random guess
-                guess = ''.join(random.choices('ABCDEFGHJKMNPQRSTUVWXYZ23456789', k=5))
+                guess = "".join(random.choices("ABCDEFGHJKMNPQRSTUVWXYZ23456789", k=5))
                 inp.send_keys(guess)
-                submit_btn = driver.find_elements(By.CSS_SELECTOR, ".captcha-form .challenge-btn")
+                submit_btn = driver.find_elements(
+                    By.CSS_SELECTOR, ".captcha-form .challenge-btn"
+                )
                 if submit_btn:
                     submit_btn[0].click()
                 time.sleep(1)
@@ -449,19 +506,20 @@ def _handle_challenge(driver, move_fn, max_retries=3):
                 canvas_size = canvas.size
                 # Click 4 random spots on the canvas (will almost certainly fail)
                 for _ in range(4):
-                    x_off = int(canvas_size['width'] * random.uniform(0.1, 0.9))
-                    y_off = int(canvas_size['height'] * random.uniform(0.1, 0.9))
-                    ActionChains(driver) \
-                        .move_to_element_with_offset(canvas, x_off, y_off) \
-                        .click() \
-                        .perform()
+                    x_off = int(canvas_size["width"] * random.uniform(0.1, 0.9))
+                    y_off = int(canvas_size["height"] * random.uniform(0.1, 0.9))
+                    ActionChains(driver).move_to_element_with_offset(
+                        canvas, x_off, y_off
+                    ).click().perform()
                     time.sleep(random.uniform(0.3, 0.8))
                 time.sleep(2)
             except Exception as e:
                 print(f"  Timed click attempt failed: {e}")
 
             # Check for "Try Again" button
-            retry_btns = driver.find_elements(By.CSS_SELECTOR, ".challenge-overlay .challenge-btn")
+            retry_btns = driver.find_elements(
+                By.CSS_SELECTOR, ".challenge-overlay .challenge-btn"
+            )
             for btn in retry_btns:
                 if "try again" in btn.text.strip().lower():
                     print("  Clicking 'Try Again'...")
@@ -471,7 +529,9 @@ def _handle_challenge(driver, move_fn, max_retries=3):
             continue
 
         # Generic fallback: click any visible challenge button
-        buttons = driver.find_elements(By.CSS_SELECTOR, ".challenge-overlay .challenge-btn")
+        buttons = driver.find_elements(
+            By.CSS_SELECTOR, ".challenge-overlay .challenge-btn"
+        )
         for btn in buttons:
             try:
                 btn.click()
@@ -511,12 +571,20 @@ def _fill_checkout(driver, type_fn, move_fn):
 
     # Generic filler for unknown fields (bot doesn't know what they are)
     GENERIC_FILLERS = [
-        "test@email.com", "5551234567", "John Doe", "123 Main St",
-        "Springfield", "12345", "some value",
+        "test@email.com",
+        "5551234567",
+        "John Doe",
+        "123 Main St",
+        "Springfield",
+        "12345",
+        "some value",
     ]
 
     # Discover ALL input fields on the page and fill them
-    all_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input[type='tel'], input[type='email'], input:not([type])")
+    all_inputs = driver.find_elements(
+        By.CSS_SELECTOR,
+        "input[type='text'], input[type='tel'], input[type='email'], input:not([type])",
+    )
     filler_idx = 0
 
     for inp in all_inputs:
@@ -541,7 +609,8 @@ def _fill_checkout(driver, type_fn, move_fn):
             # (off-screen, hidden), use JS to set value and dispatch events
             # WITHOUT unhiding — keeps the field invisible on screen
             if not inp.is_displayed():
-                driver.execute_script("""
+                driver.execute_script(
+                    """
                     var el = arguments[0];
                     var value = arguments[1];
                     // Set value via React's value setter to trigger onChange
@@ -561,7 +630,10 @@ def _fill_checkout(driver, type_fn, move_fn):
                             bubbles: true
                         }));
                     }
-                """, inp, value)
+                """,
+                    inp,
+                    value,
+                )
             else:
                 move_fn(driver, inp, click_only=True)
                 type_fn(inp, value)
@@ -602,6 +674,7 @@ def _fill_checkout(driver, type_fn, move_fn):
 # ---------------------------------------------------------------------------
 # Bot behaviors
 # ---------------------------------------------------------------------------
+
 
 def linear_bot(driver):
     """Straight-line mouse, uniform typing with slight variance."""
@@ -686,6 +759,7 @@ def replay_bot(driver, source_path: str):
 # Replay helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_replay_segments(source_path: str) -> list[dict]:
     """Load segments from a Chrome extension JSON export."""
     with open(source_path, "r", encoding="utf-8") as f:
@@ -744,9 +818,7 @@ def _replay_mouse(driver, mouse_events: list[dict], max_events: int = 100):
 
                 # Occasional micro-correction (human steadying hand)
                 if random.random() < 0.1:
-                    actions.move_by_offset(
-                        random.randint(-2, 2), random.randint(-2, 2)
-                    )
+                    actions.move_by_offset(random.randint(-2, 2), random.randint(-2, 2))
                     actions.pause(random.uniform(0.01, 0.03))
 
         prev_x, prev_y, prev_t = x, y, t
@@ -776,6 +848,7 @@ def _replay_scroll(driver, scroll_events: list[dict], max_events: int = 10):
 # ---------------------------------------------------------------------------
 # Auto-export and RL confirmation
 # ---------------------------------------------------------------------------
+
 
 def _get_session_id(driver) -> str | None:
     """Read the tracking session ID from the browser's sessionStorage."""
@@ -825,8 +898,10 @@ def _export_and_confirm(driver, run_index: int) -> None:
         print("  WARNING: 0 events captured")
         return
 
-    print(f"  Events: {len(mouse)} mouse, {len(clicks)} clicks, "
-          f"{len(keystrokes)} keystrokes, {len(scroll)} scroll")
+    print(
+        f"  Events: {len(mouse)} mouse, {len(clicks)} clicks, "
+        f"{len(keystrokes)} keystrokes, {len(scroll)} scroll"
+    )
 
     # Save JSON
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -840,13 +915,19 @@ def _export_and_confirm(driver, run_index: int) -> None:
             "startTime": int(time.time() * 1000),
             "pageMeta": [],
             "totalSegments": 1,
-            "segments": [{
-                "segmentId": 1, "url": SITE_URL, "hostname": "localhost",
-                "startTime": int(time.time() * 1000),
-                "endTime": int(time.time() * 1000),
-                "mouse": mouse, "clicks": clicks,
-                "keystrokes": keystrokes, "scroll": scroll,
-            }],
+            "segments": [
+                {
+                    "segmentId": 1,
+                    "url": SITE_URL,
+                    "hostname": "localhost",
+                    "startTime": int(time.time() * 1000),
+                    "endTime": int(time.time() * 1000),
+                    "mouse": mouse,
+                    "clicks": clicks,
+                    "keystrokes": keystrokes,
+                    "scroll": scroll,
+                }
+            ],
         }
     }
     with open(out_path, "w") as f:
@@ -858,13 +939,17 @@ def _export_and_confirm(driver, run_index: int) -> None:
     try:
         body = json.dumps({"session_id": session_id, "true_label": 0}).encode()
         req = urllib.request.Request(
-            f"{API_URL}/api/agent/confirm", data=body,
-            headers={"Content-Type": "application/json"})
+            f"{API_URL}/api/agent/confirm",
+            data=body,
+            headers={"Content-Type": "application/json"},
+        )
         with urllib.request.urlopen(req, timeout=120) as resp:
             result = json.loads(resp.read().decode())
         if result.get("updated"):
             metrics = result.get("metrics", {})
-            print(f"  RL agent updated! (loss: {metrics.get('policy_loss', '?')}, steps: {result.get('steps', '?')})")
+            print(
+                f"  RL agent updated! (loss: {metrics.get('policy_loss', '?')}, steps: {result.get('steps', '?')})"
+            )
         else:
             print(f"  RL confirmed (no update: {result.get('reason', '?')})")
     except Exception as e:
@@ -875,12 +960,17 @@ def _export_and_confirm(driver, run_index: int) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(description="Run bot against TicketMonarch")
     parser.add_argument("--runs", type=int, default=3, help="Number of bot sessions")
-    parser.add_argument("--type", choices=["linear", "scripted", "replay"], default="scripted")
+    parser.add_argument(
+        "--type", choices=["linear", "scripted", "replay"], default="scripted"
+    )
     parser.add_argument("--replay-source", type=str, help="JSON file for replay bot")
-    parser.add_argument("--pause-between", type=float, default=2.0, help="Seconds between runs")
+    parser.add_argument(
+        "--pause-between", type=float, default=2.0, help="Seconds between runs"
+    )
     args = parser.parse_args()
 
     print(f"Selenium Bot — {args.runs} {args.type} runs")
@@ -922,7 +1012,7 @@ def main():
         print(f"\n{'='*50}")
         print("All runs complete!")
         print(f"Telemetry saved to: {DATA_DIR}")
-        print("="*50)
+        print("=" * 50)
         input("Press Enter to close the browser...")
 
     finally:

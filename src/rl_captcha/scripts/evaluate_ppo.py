@@ -25,17 +25,31 @@ from rl_captcha.agent.ppo_lstm import PPOLSTM
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Evaluate PPO+LSTM agent")
-    p.add_argument("--agent", type=str, required=True,
-                    help="Path to agent checkpoint directory")
-    p.add_argument("--data-dir", type=str, default="data/",
-                    help="Path to data directory with human/ and bot/ subdirs")
-    p.add_argument("--episodes", type=int, default=500,
-                    help="Number of episodes to evaluate")
-    p.add_argument("--split", type=str, default="test",
-                    choices=["test", "val", "train", "all"],
-                    help="Which data split to evaluate on (default: test)")
-    p.add_argument("--split-seed", type=int, default=42,
-                    help="Random seed for split (must match training)")
+    p.add_argument(
+        "--agent", type=str, required=True, help="Path to agent checkpoint directory"
+    )
+    p.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/",
+        help="Path to data directory with human/ and bot/ subdirs",
+    )
+    p.add_argument(
+        "--episodes", type=int, default=500, help="Number of episodes to evaluate"
+    )
+    p.add_argument(
+        "--split",
+        type=str,
+        default="test",
+        choices=["test", "val", "train", "all"],
+        help="Which data split to evaluate on (default: test)",
+    )
+    p.add_argument(
+        "--split-seed",
+        type=int,
+        default=42,
+        help="Random seed for split (must match training)",
+    )
     p.add_argument("--device", type=str, default="auto")
     return p.parse_args()
 
@@ -61,14 +75,20 @@ def main():
         print(f"  Evaluating on ALL {len(eval_sessions)} sessions")
     else:
         train_s, val_s, test_s = split_sessions(
-            sessions, train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+            sessions,
+            train=0.70,
+            val=0.15,
+            test=0.15,
+            seed=args.split_seed,
         )
         splits = {"train": train_s, "val": val_s, "test": test_s}
         eval_sessions = splits[args.split]
         h = sum(1 for s in eval_sessions if s.label == 1)
         b = sum(1 for s in eval_sessions if s.label == 0)
-        print(f"  Evaluating on {args.split.upper()} split: "
-              f"{len(eval_sessions)} sessions ({h} human, {b} bot)")
+        print(
+            f"  Evaluating on {args.split.upper()} split: "
+            f"{len(eval_sessions)} sessions ({h} human, {b} bot)"
+        )
 
     # Create environment and agent
     env = EventEnv(eval_sessions, config=cfg.event_env)
@@ -113,7 +133,9 @@ def _run_evaluation(
         action_mask = info.get("action_mask")
         done = False
         while not done:
-            action, _, _ = agent.select_action(obs, action_mask=action_mask, deterministic=True)
+            action, _, _ = agent.select_action(
+                obs, action_mask=action_mask, deterministic=True
+            )
             obs, reward, terminated, truncated, step_info = env.step(action)
             done = terminated or truncated
 
@@ -123,14 +145,16 @@ def _run_evaluation(
             action_mask = step_info.get("action_mask")
             info = step_info
 
-        episode_data.append({
-            "true_label": true_label,
-            "outcome": info.get("outcome", "unknown"),
-            "reward": total_reward,
-            "steps": steps,
-            "actions": actions_taken,
-            "final_action": actions_taken[-1] if actions_taken else -1,
-        })
+        episode_data.append(
+            {
+                "true_label": true_label,
+                "outcome": info.get("outcome", "unknown"),
+                "reward": total_reward,
+                "steps": steps,
+                "actions": actions_taken,
+                "final_action": actions_taken[-1] if actions_taken else -1,
+            }
+        )
 
     return {"episodes": episode_data}
 
@@ -149,13 +173,27 @@ def _print_results(results: dict, split_name: str = "test"):
     print()
 
     # Confusion matrix
-    tp = sum(1 for e in episodes if e["true_label"] == 0 and e["outcome"] in
-             ("correct_block", "bot_blocked_puzzle"))
-    tn = sum(1 for e in episodes if e["true_label"] == 1 and e["outcome"] == "correct_allow")
-    fp = sum(1 for e in episodes if e["true_label"] == 1 and e["outcome"] in
-             ("false_positive_block", "fp_puzzle"))
-    fn = sum(1 for e in episodes if e["true_label"] == 0 and e["outcome"] in
-             ("false_negative", "bot_passed_puzzle"))
+    tp = sum(
+        1
+        for e in episodes
+        if e["true_label"] == 0
+        and e["outcome"] in ("correct_block", "bot_blocked_puzzle")
+    )
+    tn = sum(
+        1 for e in episodes if e["true_label"] == 1 and e["outcome"] == "correct_allow"
+    )
+    fp = sum(
+        1
+        for e in episodes
+        if e["true_label"] == 1
+        and e["outcome"] in ("false_positive_block", "fp_puzzle")
+    )
+    fn = sum(
+        1
+        for e in episodes
+        if e["true_label"] == 0
+        and e["outcome"] in ("false_negative", "bot_passed_puzzle")
+    )
     truncated = sum(1 for e in episodes if e["outcome"] == "truncated")
     other = n - tp - tn - fp - fn - truncated
 
@@ -171,7 +209,11 @@ def _print_results(results: dict, split_name: str = "test"):
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
     accuracy = (tp + tn) / n if n > 0 else 0.0
 
     print(f"  Accuracy:  {accuracy:.3f}")

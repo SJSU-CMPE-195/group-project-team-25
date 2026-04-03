@@ -21,9 +21,13 @@ from rl_captcha.config import EventEnvConfig
 from rl_captcha.data.loader import Session
 
 ACTION_NAMES = [
-    "continue", "deploy_honeypot",
-    "easy_puzzle", "medium_puzzle", "hard_puzzle",
-    "allow", "block",
+    "continue",
+    "deploy_honeypot",
+    "easy_puzzle",
+    "medium_puzzle",
+    "hard_puzzle",
+    "allow",
+    "block",
 ]
 
 # Event type indices
@@ -150,7 +154,7 @@ class EventEncoder:
                 prev_speed = speed
 
             vec[4] = min(_safe_mean(speeds), cfg.max_speed) / cfg.max_speed
-            vec[5] = min(_safe_var(speeds), cfg.max_speed ** 2) / (cfg.max_speed ** 2)
+            vec[5] = min(_safe_var(speeds), cfg.max_speed**2) / (cfg.max_speed**2)
             vec[6] = min(_safe_mean(accels), cfg.max_speed * 10) / (cfg.max_speed * 10)
 
             # Path curvature: path_length / straight-line displacement
@@ -173,19 +177,28 @@ class EventEncoder:
             t1 = events[i].get("t", events[i].get("timestamp", 0)) or 0
             dts.append(max(t1 - t0, 0))
         if dts:
-            vec[8] = math.log1p(min(_safe_mean(dts), cfg.max_dt_ms)) / math.log1p(cfg.max_dt_ms)
-            vec[9] = min(_safe_var(dts), cfg.max_dt_ms ** 2) / (cfg.max_dt_ms ** 2)
-            vec[10] = math.log1p(min(min(dts), cfg.max_dt_ms)) / math.log1p(cfg.max_dt_ms)
+            vec[8] = math.log1p(min(_safe_mean(dts), cfg.max_dt_ms)) / math.log1p(
+                cfg.max_dt_ms
+            )
+            vec[9] = min(_safe_var(dts), cfg.max_dt_ms**2) / (cfg.max_dt_ms**2)
+            vec[10] = math.log1p(min(min(dts), cfg.max_dt_ms)) / math.log1p(
+                cfg.max_dt_ms
+            )
 
         # ── Click timing [11-12] ─────────────────────────────────────
         click_times = [
             e.get("t", e.get("timestamp", 0)) or 0
-            for e in events if e["_type"] == EVENT_CLICK
+            for e in events
+            if e["_type"] == EVENT_CLICK
         ]
         if len(click_times) >= 2:
-            click_dts = [click_times[i] - click_times[i - 1] for i in range(1, len(click_times))]
-            vec[11] = math.log1p(min(_safe_mean(click_dts), cfg.max_dt_ms)) / math.log1p(cfg.max_dt_ms)
-            vec[12] = min(_safe_var(click_dts), cfg.max_dt_ms ** 2) / (cfg.max_dt_ms ** 2)
+            click_dts = [
+                click_times[i] - click_times[i - 1] for i in range(1, len(click_times))
+            ]
+            vec[11] = math.log1p(
+                min(_safe_mean(click_dts), cfg.max_dt_ms)
+            ) / math.log1p(cfg.max_dt_ms)
+            vec[12] = min(_safe_var(click_dts), cfg.max_dt_ms**2) / (cfg.max_dt_ms**2)
 
         # ── Keystroke features [13-16] ───────────────────────────────
         key_downs = {}
@@ -210,18 +223,28 @@ class EventEncoder:
             vec[13] = min(_safe_mean(key_holds), 1000) / 1000
             vec[14] = min(_safe_var(key_holds), 1e6) / 1e6
         if len(key_down_times) >= 2:
-            key_intervals = [key_down_times[i] - key_down_times[i - 1] for i in range(1, len(key_down_times))]
-            vec[15] = math.log1p(min(_safe_mean(key_intervals), cfg.max_dt_ms)) / math.log1p(cfg.max_dt_ms)
-            vec[16] = min(_safe_var(key_intervals), cfg.max_dt_ms ** 2) / (cfg.max_dt_ms ** 2)
+            key_intervals = [
+                key_down_times[i] - key_down_times[i - 1]
+                for i in range(1, len(key_down_times))
+            ]
+            vec[15] = math.log1p(
+                min(_safe_mean(key_intervals), cfg.max_dt_ms)
+            ) / math.log1p(cfg.max_dt_ms)
+            vec[16] = min(_safe_var(key_intervals), cfg.max_dt_ms**2) / (
+                cfg.max_dt_ms**2
+            )
 
         # ── Scroll features [17-18] ──────────────────────────────────
         scroll_dys = [
             (e.get("dy", 0) or 0) for e in events if e["_type"] == EVENT_SCROLL
         ]
         if scroll_dys:
-            vec[17] = np.clip(sum(abs(d) for d in scroll_dys) / (cfg.max_scroll_dy * 10), 0, 1)
+            vec[17] = np.clip(
+                sum(abs(d) for d in scroll_dys) / (cfg.max_scroll_dy * 10), 0, 1
+            )
             direction_changes = sum(
-                1 for i in range(1, len(scroll_dys))
+                1
+                for i in range(1, len(scroll_dys))
                 if scroll_dys[i] * scroll_dys[i - 1] < 0
             )
             vec[18] = min(direction_changes, 10) / 10
@@ -304,17 +327,37 @@ def _augment_bot_timeline(events: list[dict], config: EventEnvConfig) -> list[di
 
         # --- 3. Position noise ------------------------------------------
         if "x" in e and e["x"] is not None:
-            e["x"] = max(0, min(config.max_coord_x,
-                                e["x"] + rng.gauss(0, config.aug_position_noise_std)))
+            e["x"] = max(
+                0,
+                min(
+                    config.max_coord_x,
+                    e["x"] + rng.gauss(0, config.aug_position_noise_std),
+                ),
+            )
         if "y" in e and e["y"] is not None:
-            e["y"] = max(0, min(config.max_coord_y,
-                                e["y"] + rng.gauss(0, config.aug_position_noise_std)))
+            e["y"] = max(
+                0,
+                min(
+                    config.max_coord_y,
+                    e["y"] + rng.gauss(0, config.aug_position_noise_std),
+                ),
+            )
         if "pageX" in e and e["pageX"] is not None:
-            e["pageX"] = max(0, min(config.max_coord_x,
-                                    e["pageX"] + rng.gauss(0, config.aug_position_noise_std)))
+            e["pageX"] = max(
+                0,
+                min(
+                    config.max_coord_x,
+                    e["pageX"] + rng.gauss(0, config.aug_position_noise_std),
+                ),
+            )
         if "pageY" in e and e["pageY"] is not None:
-            e["pageY"] = max(0, min(config.max_coord_y,
-                                    e["pageY"] + rng.gauss(0, config.aug_position_noise_std)))
+            e["pageY"] = max(
+                0,
+                min(
+                    config.max_coord_y,
+                    e["pageY"] + rng.gauss(0, config.aug_position_noise_std),
+                ),
+            )
 
         augmented.append(e)
 
@@ -350,7 +393,8 @@ class EventEnv(gym.Env):
         self._bot_sessions = [s for s in self._sessions if s.label == 0]
 
         self.observation_space = gym.spaces.Box(
-            low=-10.0, high=10.0,
+            low=-10.0,
+            high=10.0,
             shape=(self.config.event_dim,),
             dtype=np.float32,
         )
@@ -402,9 +446,11 @@ class EventEnv(gym.Env):
         timeline = self._encoder.build_timeline(session)
 
         # Augment bot sessions stochastically during training
-        if (self.config.augment
-                and session.label == 0
-                and random.random() < self.config.augment_prob):
+        if (
+            self.config.augment
+            and session.label == 0
+            and random.random() < self.config.augment_prob
+        ):
             timeline = _augment_bot_timeline(timeline, self.config)
 
         # Split timeline into overlapping windows
@@ -412,7 +458,7 @@ class EventEnv(gym.Env):
         stride = ws // 2  # 50% overlap for smoother transitions
         self._windows = []
         for start in range(0, len(timeline), stride):
-            window = timeline[start:start + ws]
+            window = timeline[start : start + ws]
             if len(window) >= self.config.min_events:
                 self._windows.append(window)
 

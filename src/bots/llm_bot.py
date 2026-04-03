@@ -40,7 +40,6 @@ import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 SITE_URL = "http://localhost:3000"
 API_URL = "http://localhost:5000"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "bot"
@@ -141,8 +140,9 @@ def api_post(path: str, body: dict, timeout: int = 10) -> dict | None:
     try:
         url = f"{API_URL}{path}"
         data = json.dumps(body).encode()
-        req = urllib.request.Request(url, data=data,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(
+            url, data=data, headers={"Content-Type": "application/json"}
+        )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
     except Exception as e:
@@ -180,17 +180,19 @@ def save_telemetry_json(session_id: str, raw: dict, run_index: int) -> Path:
             "startTime": int(time.time() * 1000),
             "pageMeta": [],
             "totalSegments": 1,
-            "segments": [{
-                "segmentId": 1,
-                "url": SITE_URL,
-                "hostname": "localhost",
-                "startTime": int(time.time() * 1000),
-                "endTime": int(time.time() * 1000),
-                "mouse": mouse,
-                "clicks": clicks,
-                "keystrokes": keystrokes,
-                "scroll": scroll,
-            }],
+            "segments": [
+                {
+                    "segmentId": 1,
+                    "url": SITE_URL,
+                    "hostname": "localhost",
+                    "startTime": int(time.time() * 1000),
+                    "endTime": int(time.time() * 1000),
+                    "mouse": mouse,
+                    "clicks": clicks,
+                    "keystrokes": keystrokes,
+                    "scroll": scroll,
+                }
+            ],
         }
     }
 
@@ -263,7 +265,9 @@ async def _read_session_id_from_browser(browser) -> str | None:
     return None
 
 
-async def extract_and_save(browser, run_index: int, known_session_ids: list[str]) -> str | None:
+async def extract_and_save(
+    browser, run_index: int, known_session_ids: list[str]
+) -> str | None:
     """Extract telemetry from Flask backend and save to data/bot/.
 
     Uses three strategies to find the session ID:
@@ -319,8 +323,10 @@ async def extract_and_save(browser, run_index: int, known_session_ids: list[str]
         print("  WARNING: Session exists but has 0 events")
         return None
 
-    print(f"  Events: {mouse_count} mouse, {click_count} clicks, "
-          f"{key_count} keystrokes, {scroll_count} scroll")
+    print(
+        f"  Events: {mouse_count} mouse, {click_count} clicks, "
+        f"{key_count} keystrokes, {scroll_count} scroll"
+    )
 
     out_path = save_telemetry_json(session_id, raw, run_index)
     print(f"  Saved: {out_path.name} ({total} events)")
@@ -329,24 +335,36 @@ async def extract_and_save(browser, run_index: int, known_session_ids: list[str]
 
 def confirm_bot(session_id: str) -> None:
     """Tell the RL agent this session was a bot so it can learn."""
-    print("  Confirming bot label + triggering online RL update (this may take a minute)...")
-    result = api_post("/api/agent/confirm", {
-        "session_id": session_id,
-        "true_label": 0,  # 0 = bot
-    }, timeout=120)  # PPO update on large sessions can take >10s
+    print(
+        "  Confirming bot label + triggering online RL update (this may take a minute)..."
+    )
+    result = api_post(
+        "/api/agent/confirm",
+        {
+            "session_id": session_id,
+            "true_label": 0,  # 0 = bot
+        },
+        timeout=120,
+    )  # PPO update on large sessions can take >10s
     if result and result.get("success"):
         updated = result.get("updated", False)
         if updated:
             metrics = result.get("metrics", {})
-            print(f"  RL agent updated! (loss: {metrics.get('policy_loss', '?')}, steps: {result.get('steps', '?')})")
+            print(
+                f"  RL agent updated! (loss: {metrics.get('policy_loss', '?')}, steps: {result.get('steps', '?')})"
+            )
         else:
             print(f"  RL agent confirmed (no update: {result.get('reason', '?')})")
     else:
         print("  WARNING: Could not confirm bot label with RL agent")
 
 
-async def run_llm_bot(provider: str = "anthropic", task: str | None = None,
-                      browser=None, inject_events: bool = False):
+async def run_llm_bot(
+    provider: str = "anthropic",
+    task: str | None = None,
+    browser=None,
+    inject_events: bool = False,
+):
     """Run a single LLM bot session."""
     try:
         from browser_use import Agent, Browser
@@ -376,9 +394,11 @@ async def run_llm_bot(provider: str = "anthropic", task: str | None = None,
 
     if provider == "anthropic":
         from browser_use import ChatAnthropic
+
         llm = ChatAnthropic(model="claude-sonnet-4-20250514")
     elif provider == "openai":
         from browser_use import ChatOpenAI
+
         llm = ChatOpenAI(model="gpt-4o")
     else:
         print(f"Unknown provider: {provider}")
@@ -401,8 +421,13 @@ async def run_llm_bot(provider: str = "anthropic", task: str | None = None,
     return browser
 
 
-async def run_multiple(provider: str, runs: int, task: str | None,
-                       pause: float, inject_events: bool = False):
+async def run_multiple(
+    provider: str,
+    runs: int,
+    task: str | None,
+    pause: float,
+    inject_events: bool = False,
+):
     """Run multiple LLM bot sessions."""
     try:
         from browser_use import Browser
@@ -420,7 +445,11 @@ async def run_multiple(provider: str, runs: int, task: str | None,
         print(f"\n{'='*50}")
         # Alternate injection: even runs get injection, odd runs don't
         use_injection = inject_events and (i % 2 == 0)
-        mode = "WITH event injection" if use_injection else "WITHOUT event injection (sparse)"
+        mode = (
+            "WITH event injection"
+            if use_injection
+            else "WITHOUT event injection (sparse)"
+        )
         print(f"LLM Bot Run {i + 1}/{runs} ({mode})")
         print(f"{'='*50}")
 
@@ -428,8 +457,12 @@ async def run_multiple(provider: str, runs: int, task: str | None,
         known_ids = get_recent_session_ids()
 
         try:
-            await run_llm_bot(provider=provider, task=task, browser=browser,
-                              inject_events=use_injection)
+            await run_llm_bot(
+                provider=provider,
+                task=task,
+                browser=browser,
+                inject_events=use_injection,
+            )
         except Exception as e:
             print(f"  Run {i + 1} error: {e}")
 
@@ -448,7 +481,7 @@ async def run_multiple(provider: str, runs: int, task: str | None,
     print(f"\n{'='*50}")
     print("All runs complete!")
     print(f"Telemetry saved to: {DATA_DIR}")
-    print("="*50)
+    print("=" * 50)
 
     input("Press Enter to close the browser...")
     await browser.stop()
@@ -457,15 +490,24 @@ async def run_multiple(provider: str, runs: int, task: str | None,
 def main():
     parser = argparse.ArgumentParser(description="Run LLM-powered bot")
     parser.add_argument("--runs", type=int, default=1)
-    parser.add_argument("--provider", choices=["anthropic", "openai"], default="anthropic")
+    parser.add_argument(
+        "--provider", choices=["anthropic", "openai"], default="anthropic"
+    )
     parser.add_argument("--pause-between", type=float, default=3.0)
     parser.add_argument("--task", type=str, default=None)
-    parser.add_argument("--inject-events", action="store_true",
-                        help="Inject DOM events so tracking.js captures full telemetry. "
-                             "Alternates: even runs get injection, odd runs don't.")
+    parser.add_argument(
+        "--inject-events",
+        action="store_true",
+        help="Inject DOM events so tracking.js captures full telemetry. "
+        "Alternates: even runs get injection, odd runs don't.",
+    )
     args = parser.parse_args()
 
-    mode = "alternating injection" if args.inject_events else "native CDP (sparse telemetry)"
+    mode = (
+        "alternating injection"
+        if args.inject_events
+        else "native CDP (sparse telemetry)"
+    )
     print(f"LLM Bot ({args.provider}) - {args.runs} runs [{mode}]")
     print(f"Target: {SITE_URL}")
     print(f"Output: {DATA_DIR}")
@@ -473,13 +515,15 @@ def main():
     print("Make sure backend (python app.py) and frontend (npm run dev) are running!")
     print()
 
-    asyncio.run(run_multiple(
-        provider=args.provider,
-        runs=args.runs,
-        task=args.task,
-        pause=args.pause_between,
-        inject_events=args.inject_events,
-    ))
+    asyncio.run(
+        run_multiple(
+            provider=args.provider,
+            runs=args.runs,
+            task=args.task,
+            pause=args.pause_between,
+            inject_events=args.inject_events,
+        )
+    )
 
 
 if __name__ == "__main__":

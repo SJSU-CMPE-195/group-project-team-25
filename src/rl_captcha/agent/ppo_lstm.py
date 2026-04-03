@@ -73,7 +73,9 @@ class PPOLSTM:
     # ── Action selection ────────────────────────────────────────────
 
     def select_action(
-        self, obs: np.ndarray, action_mask: np.ndarray | None = None,
+        self,
+        obs: np.ndarray,
+        action_mask: np.ndarray | None = None,
         deterministic: bool = False,
     ) -> tuple[int, float, float]:
         """Pick an action for one observation during rollout.
@@ -92,7 +94,9 @@ class PPOLSTM:
 
             mask_t = None
             if action_mask is not None:
-                mask_t = torch.from_numpy(action_mask).float().unsqueeze(0).to(self.device)
+                mask_t = (
+                    torch.from_numpy(action_mask).float().unsqueeze(0).to(self.device)
+                )
 
             logits, values, new_hidden = self.network(obs_t, (h, c), action_mask=mask_t)
             probs = F.softmax(logits, dim=-1)
@@ -143,19 +147,21 @@ class PPOLSTM:
 
         for _epoch in range(cfg.num_epochs):
             for seg in segments:
-                obs = seg["obs"].to(self.device)            # (T, obs_dim)
-                actions = seg["actions"].to(self.device)     # (T,)
+                obs = seg["obs"].to(self.device)  # (T, obs_dim)
+                actions = seg["actions"].to(self.device)  # (T,)
                 old_log_probs = seg["old_log_probs"].to(self.device)  # (T,)
-                advantages = seg["advantages"].to(self.device)        # (T,)
-                returns = seg["returns"].to(self.device)              # (T,)
-                masks = seg.get("action_masks")                       # (T, 7) or None
+                advantages = seg["advantages"].to(self.device)  # (T,)
+                returns = seg["returns"].to(self.device)  # (T,)
+                masks = seg.get("action_masks")  # (T, 7) or None
 
                 h0 = seg["h0"].to(self.device)  # (num_layers, 1, hidden)
                 c0 = seg["c0"].to(self.device)
 
                 # Normalize advantages within segment
                 if len(advantages) > 1:
-                    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+                    advantages = (advantages - advantages.mean()) / (
+                        advantages.std() + 1e-8
+                    )
 
                 # Forward pass: process entire segment sequentially
                 # obs shape: (T, obs_dim) → add batch dim → (1, T, obs_dim)
@@ -169,7 +175,7 @@ class PPOLSTM:
                 logits, values, _ = self.network(obs_seq, (h0, c0), action_mask=mask_t)
 
                 # logits: (1, T, action_dim), values: (1, T, 1)
-                logits = logits.squeeze(0)   # (T, action_dim)
+                logits = logits.squeeze(0)  # (T, action_dim)
                 values = values.squeeze(0).squeeze(-1)  # (T,)
 
                 # Compute new log probs and entropy
@@ -181,7 +187,10 @@ class PPOLSTM:
                 # PPO clipped surrogate
                 ratio = (new_log_probs - old_log_probs).exp()
                 surr1 = ratio * advantages
-                surr2 = torch.clamp(ratio, 1.0 - cfg.clip_eps, 1.0 + cfg.clip_eps) * advantages
+                surr2 = (
+                    torch.clamp(ratio, 1.0 - cfg.clip_eps, 1.0 + cfg.clip_eps)
+                    * advantages
+                )
                 policy_loss = -torch.min(surr1, surr2).mean()
 
                 # Value loss
@@ -197,7 +206,8 @@ class PPOLSTM:
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(
-                    self.network.parameters(), cfg.max_grad_norm,
+                    self.network.parameters(),
+                    cfg.max_grad_norm,
                 )
                 self.optimizer.step()
 
@@ -252,7 +262,8 @@ class PPOLSTM:
         """Load network and optimizer state."""
         path = Path(path)
         checkpoint = torch.load(
-            path / "ppo_lstm_checkpoint.pt", map_location=self.device,
+            path / "ppo_lstm_checkpoint.pt",
+            map_location=self.device,
         )
         self.network.load_state_dict(checkpoint["network"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])
