@@ -17,8 +17,9 @@ jobs:
       - run: pip install flake8 black
       - name: Check formatting
         run: black --check src/ tests/
-      # - name: Lint
-      #   run: flake8 src/ tests/ --max-line-length=120
+      - name: Lint
+        run: flake8 . --exit-zero
+        # run: flake8 src/ tests/ --max-line-length=120
 
   test:
     runs-on: ubuntu-latest
