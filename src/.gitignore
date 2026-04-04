@@ -33,3 +33,4 @@ build/
 # Training data (large JSON telemetry files)
 data/human/*.json
 data/bot/*.json
+data/bot_augmented/*.json

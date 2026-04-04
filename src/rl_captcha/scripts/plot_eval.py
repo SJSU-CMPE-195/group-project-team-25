@@ -60,17 +60,17 @@ RE_TIER_LINE = re.compile(
     r"^\s+Tier\s+(\d+)\s+\(([^)]+)\):\s+(\d+)\s+bots?,\s+([\d.]+)%\s+detected"
 )
 
-# Consistent colors for algorithms (solid = no aug, dashed-pattern = adv aug)
+# Pastel colors for algorithms
 ALGO_COLORS = {
-    "ppo": "#3498db",
-    "dg": "#e67e22",
-    "soft_ppo": "#9b59b6",
-    "ppo_noaug": "#3498db",
-    "dg_noaug": "#e67e22",
-    "soft_ppo_noaug": "#9b59b6",
-    "ppo_advaug": "#1a6fb5",
-    "dg_advaug": "#c0641a",
-    "soft_ppo_advaug": "#7d3f96",
+    "ppo": "#7bb3e0",
+    "dg": "#f0a870",
+    "soft_ppo": "#b39ddb",
+    "ppo_noaug": "#7bb3e0",
+    "dg_noaug": "#f0a870",
+    "soft_ppo_noaug": "#b39ddb",
+    "ppo_advaug": "#a0cff0",
+    "dg_advaug": "#f5c9a0",
+    "soft_ppo_advaug": "#d1c4e9",
 }
 ALGO_LABELS = {
     "ppo": "PPO",
@@ -84,13 +84,13 @@ ALGO_LABELS = {
     "soft_ppo_advaug": "Soft PPO (adv aug)",
 }
 
-# Tier colors (consistent across all plots)
+# Pastel tier colors
 TIER_COLORS = {
-    1: "#2ecc71",   # green — commodity (easy)
-    2: "#3498db",   # blue — careful automation
-    3: "#f39c12",   # orange — semi-automated
-    4: "#e74c3c",   # red — trace-conditioned
-    5: "#8e44ad",   # purple — LLM-powered
+    1: "#a8ddb5",   # soft green — commodity
+    2: "#a0c4e8",   # soft blue — careful automation
+    3: "#fdd49e",   # soft orange — semi-automated
+    4: "#f4a0a0",   # soft red — trace-conditioned
+    5: "#c9b0d8",   # soft purple — LLM-powered
 }
 TIER_NAMES = {
     1: "T1: Commodity",
@@ -272,48 +272,72 @@ def _get_label(name: str) -> str:
 
 def _setup_style():
     plt.rcParams.update({
-        "font.family": "serif",
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Segoe UI", "Helvetica", "Arial", "DejaVu Sans"],
         "font.size": 11,
         "axes.titlesize": 13,
-        "axes.labelsize": 12,
-        "legend.fontsize": 10,
-        "figure.dpi": 300,
+        "axes.titleweight": "bold",
+        "axes.labelsize": 11,
+        "axes.labelcolor": "#444444",
+        "legend.fontsize": 9,
+        "figure.dpi": 200,
+        "figure.facecolor": "white",
+        "axes.facecolor": "#fafafa",
+        "axes.edgecolor": "#dddddd",
+        "axes.grid": True,
+        "grid.alpha": 0.25,
+        "grid.color": "#e0e0e0",
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "xtick.color": "#666666",
+        "ytick.color": "#666666",
         "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.15,
+        "savefig.pad_inches": 0.25,
+        "savefig.facecolor": "white",
     })
 
 
-def plot_single(name: str, result: dict, out_dir: Path, fmt: str = "png"):
+def plot_single(name: str, result: dict, out_dir: Path, fmt: str = "png", test_set_label: str = ""):
     """Generate per-agent evaluation plots."""
     _setup_style()
     split_name = result.get("split", "test").upper()
+    if test_set_label:
+        split_name = f"{split_name} — {test_set_label}"
     label = _get_label(name)
 
-    # Confusion matrix
+    # Confusion matrix (pastel blue style)
     tp = result.get("tp", 0)
     tn = result.get("tn", 0)
     fp = result.get("fp", 0)
     fn = result.get("fn", 0)
     total = tp + tn + fp + fn or 1
 
-    cm = np.array([[tn, fp], [fn, tp]])
-    cm_pct = cm / total * 100
+    cm = np.array([[tp, fn], [fp, tn]])
 
-    fig, ax = plt.subplots(figsize=(5, 4))
-    im = ax.imshow(cm_pct, cmap="Blues", vmin=0, vmax=cm_pct.max() * 1.2)
+    fig, ax = plt.subplots(figsize=(5.5, 5))
+    # Fixed color mapping to match classifier visual: TP=medium blue, TN=dark navy, off-diag=light
+    cm_visual = np.array([
+        [0.5, cm[0, 1] / max(total, 1)],
+        [cm[1, 0] / max(total, 1), 1.0],
+    ])
+    im = ax.imshow(cm_visual, cmap="Blues", vmin=0, vmax=1)
     ax.set_xticks([0, 1])
     ax.set_yticks([0, 1])
-    ax.set_xticklabels(["Predicted\nHuman", "Predicted\nBot"])
-    ax.set_yticklabels(["Actual\nHuman", "Actual\nBot"])
+    ax.set_xticklabels(["Bot", "Human"], fontsize=12)
+    ax.set_yticklabels(["Bot", "Human"], fontsize=12)
+    ax.set_xlabel("Predicted", fontsize=12)
+    ax.set_ylabel("True", fontsize=12)
+    ax.grid(False)
     for i in range(2):
         for j in range(2):
             val = cm[i, j]
-            pct = cm_pct[i, j]
-            color = "white" if pct > cm_pct.max() * 0.6 else "black"
-            ax.text(j, i, f"{val}\n({pct:.1f}%)", ha="center", va="center",
-                    fontsize=14, fontweight="bold", color=color)
-    ax.set_title(f"{label} — Confusion Matrix ({split_name})")
-    fig.colorbar(im, ax=ax, label="% of episodes", shrink=0.8)
+            color = "white" if cm_visual[i, j] > 0.4 else "black"
+            ax.text(j, i, str(val), ha="center", va="center",
+                    fontsize=22, color=color)
+    ax.set_title(f"Confusion Matrix", fontsize=14, fontweight="bold", pad=15)
+    fig.text(0.5, 0.01, f"{label}  (n={total})", ha="center",
+             fontsize=10, style="italic", color="#888888")
+    fig.tight_layout(rect=[0, 0.05, 1, 1])
     fig.savefig(out_dir / f"eval_{name}_confusion.{fmt}")
     plt.close(fig)
     print(f"  Saved eval_{name}_confusion.{fmt}")
@@ -427,7 +451,7 @@ def _plot_tier_bars_single(name: str, tiers: dict, out_dir: Path, fmt: str, spli
     print(f"  Saved eval_{name}_per_tier.{fmt}")
 
 
-def plot_tier_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png"):
+def plot_tier_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png", test_set_label: str = ""):
     """Per-tier detection rates compared across all agents (grouped bar chart)."""
     names = [n for n in agents if n != "_meta"]
     # Collect all tier numbers across agents
@@ -440,6 +464,8 @@ def plot_tier_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png
     _setup_style()
     meta = agents.get("_meta", {})
     split_name = meta.get("split", "test").upper()
+    if test_set_label:
+        split_name = f"{split_name} — {test_set_label}"
     tier_nums = sorted(all_tiers)
 
     x = np.arange(len(tier_nums))
@@ -484,7 +510,7 @@ def plot_tier_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png
     print(f"  Saved eval_tier_comparison.{fmt}")
 
 
-def plot_family_heatmap(agents: dict[str, dict], out_dir: Path, fmt: str = "png"):
+def plot_family_heatmap(agents: dict[str, dict], out_dir: Path, fmt: str = "png", test_set_label: str = ""):
     """Heatmap: agents × bot families, cell = detection rate."""
     names = [n for n in agents if n != "_meta"]
     # Collect all families
@@ -497,6 +523,8 @@ def plot_family_heatmap(agents: dict[str, dict], out_dir: Path, fmt: str = "png"
     _setup_style()
     meta = agents.get("_meta", {})
     split_name = meta.get("split", "test").upper()
+    if test_set_label:
+        split_name = f"{split_name} — {test_set_label}"
 
     # Sort families by tier then name
     def _sort_key(fam):
@@ -555,7 +583,73 @@ def plot_family_heatmap(agents: dict[str, dict], out_dir: Path, fmt: str = "png"
     print(f"  Saved eval_family_heatmap.{fmt}")
 
 
-def plot_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png"):
+def plot_outcome_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png", test_set_label: str = ""):
+    """Stacked bar chart of outcome distributions with puzzle difficulty breakdown."""
+    names = [n for n in agents if n != "_meta"]
+    all_outcomes = set()
+    for name in names:
+        all_outcomes.update(agents[name].get("outcomes", {}).keys())
+    if not all_outcomes:
+        return
+
+    _setup_style()
+    meta = agents.get("_meta", {})
+    split_name = meta.get("split", "test").upper()
+    if test_set_label:
+        split_name = f"{split_name} — {test_set_label}"
+
+    # Build stacked segments: correct decisions, puzzle breakdown by difficulty, errors
+    # Segment: (key, label, color, source)
+    #   source="outcomes" reads from outcomes dict, source="actions" reads from actions dict
+    segments = [
+        ("correct_allow", "Correct Allow", "#5b9bd5", "outcomes"),
+        ("correct_block", "Correct Block", "#2a6099", "outcomes"),
+        ("easy_puzzle", "Easy Puzzle", "#a9d18e", "actions"),
+        ("medium_puzzle", "Medium Puzzle", "#f4b183", "actions"),
+        ("hard_puzzle", "Hard Puzzle", "#c55a5a", "actions"),
+        ("human_passed_puzzle", "Human Passed Puzzle", "#8fbc8f", "outcomes"),
+        ("bot_passed_puzzle", "Bot Passed Puzzle", "#d98880", "outcomes"),
+        ("fp_puzzle", "Unnecessary Puzzle (Human)", "#f0b27a", "outcomes"),
+        ("false_negative", "False Negative", "#e07070", "outcomes"),
+        ("false_positive", "False Positive", "#edab76", "outcomes"),
+    ]
+
+    # Filter to segments that actually have data
+    active_segments = []
+    for key, label, color, source in segments:
+        has_data = any(
+            agents[n].get("actions" if source == "actions" else "outcomes", {}).get(key, 0) > 0
+            for n in names
+        )
+        if has_data:
+            active_segments.append((key, label, color, source))
+
+    fig, ax = plt.subplots(figsize=(max(10, len(names) * 1.8), 7))
+    x = np.arange(len(names))
+    bottoms = np.zeros(len(names))
+
+    for key, label, color, source in active_segments:
+        src_key = "actions" if source == "actions" else "outcomes"
+        counts = np.array([agents[n].get(src_key, {}).get(key, 0) for n in names], dtype=float)
+        ax.bar(x, counts, bottom=bottoms, label=label, color=color,
+               edgecolor="#f5f5f5", linewidth=0.5, width=0.6)
+        bottoms += counts
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([_get_label(n) for n in names], rotation=15, ha="right")
+    ax.set_ylabel("Episode Count")
+    ax.set_title(f"Outcome Distribution — {split_name} Split")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), fontsize=8, ncol=3, frameon=False)
+    ax.grid(False)
+
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.22)
+    fig.savefig(out_dir / f"eval_outcome_comparison.{fmt}")
+    plt.close(fig)
+    print(f"  Saved eval_outcome_comparison.{fmt}")
+
+
+def plot_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png", test_set_label: str = ""):
     """Generate multi-agent comparison plots."""
     names = [n for n in agents if n != "_meta"]
     if not names:
@@ -564,6 +658,8 @@ def plot_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png"):
     _setup_style()
     meta = agents.get("_meta", {})
     split_name = meta.get("split", "test").upper()
+    if test_set_label:
+        split_name = f"{split_name} — {test_set_label}"
 
     # ── 1. Grouped metrics bar chart ─────────────────────────────────
     metric_keys = ["accuracy", "precision", "recall", "f1"]
@@ -594,39 +690,56 @@ def plot_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png"):
     plt.close(fig)
     print(f"  Saved eval_metrics_comparison.{fmt}")
 
-    # ── 2. Confusion matrices side by side ───────────────────────────
+    # ── 2. Confusion matrices side by side (Blues cmap) ──────────
+
     n_agents = len(names)
-    fig, axes = plt.subplots(1, n_agents, figsize=(5 * n_agents, 4))
-    if n_agents == 1:
-        axes = [axes]
+    if n_agents > 3:
+        n_rows, n_cols = 2, (n_agents + 1) // 2
+    else:
+        n_rows, n_cols = 1, n_agents
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 5 * n_rows))
+    fig.subplots_adjust(hspace=0.45, wspace=0.35)
+    axes_flat = np.array(axes).flatten()
 
     for idx, name in enumerate(names):
-        ax = axes[idx]
+        ax = axes_flat[idx]
         r = agents[name]
         tp = r.get("tp", 0)
         tn = r.get("tn", 0)
         fp = r.get("fp", 0)
         fn = r.get("fn", 0)
-        total = tp + tn + fp + fn or 1
-        cm = np.array([[tn, fp], [fn, tp]])
-        cm_pct = cm / total * 100
+        cm = np.array([[tp, fn], [fp, tn]])
+        cm_total = tp + tn + fp + fn or 1
+        cm_visual = np.array([
+            [0.5, cm[0, 1] / max(cm_total, 1)],
+            [cm[1, 0] / max(cm_total, 1), 1.0],
+        ])
 
-        im = ax.imshow(cm_pct, cmap="Blues", vmin=0, vmax=max(cm_pct.max() * 1.2, 1))
+        im = ax.imshow(cm_visual, cmap="Blues", vmin=0, vmax=1)
         ax.set_xticks([0, 1])
         ax.set_yticks([0, 1])
-        ax.set_xticklabels(["Pred Human", "Pred Bot"])
-        ax.set_yticklabels(["True Human", "True Bot"])
+        ax.set_xticklabels(["Bot", "Human"], fontsize=10)
+        ax.set_yticklabels(["Bot", "Human"], fontsize=10)
+        if idx % n_cols == 0:
+            ax.set_ylabel("True", fontsize=10)
+        ax.set_xlabel("Predicted", fontsize=10)
+        ax.grid(False)
         for i in range(2):
             for j in range(2):
                 val = cm[i, j]
-                pct = cm_pct[i, j]
-                color = "white" if pct > cm_pct.max() * 0.6 else "black"
-                ax.text(j, i, f"{val}\n({pct:.1f}%)", ha="center", va="center",
-                        fontsize=12, fontweight="bold", color=color)
-        ax.set_title(_get_label(name))
+                color = "white" if cm_visual[i, j] > 0.4 else "black"
+                ax.text(j, i, str(val), ha="center", va="center",
+                        fontsize=18, color=color)
+        acc = r.get("accuracy", 0)
+        ax.set_title(f"{_get_label(name)}\nAcc={acc:.3f}", fontsize=11,
+                     fontweight="bold", color="#444444", pad=10)
 
-    fig.suptitle(f"Confusion Matrices — {split_name} Split", fontsize=14, fontweight="bold")
-    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    for idx in range(n_agents, len(axes_flat)):
+        axes_flat[idx].axis("off")
+
+    fig.suptitle(f"Confusion Matrices — {split_name} Split",
+                 fontsize=15, fontweight="bold", color="#333333", y=1.01)
     fig.savefig(out_dir / f"eval_confusion_comparison.{fmt}")
     plt.close(fig)
     print(f"  Saved eval_confusion_comparison.{fmt}")
@@ -660,22 +773,28 @@ def plot_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png"):
         print(f"  Saved eval_timing_comparison.{fmt}")
 
     # ── 4. Per-tier comparison ────────────────────────────────────────
-    plot_tier_comparison(agents, out_dir, fmt)
+    plot_tier_comparison(agents, out_dir, fmt, test_set_label=test_set_label)
 
     # ── 5. Family heatmap ─────────────────────────────────────────────
-    plot_family_heatmap(agents, out_dir, fmt)
+    plot_family_heatmap(agents, out_dir, fmt, test_set_label=test_set_label)
 
-    # ── 6. Combined summary (2×3 grid) ───────────────────────────────
-    _plot_combined_summary(agents, names, split_name, out_dir, fmt)
+    # ── 6. Outcome distribution comparison ─────────────────────────────
+    plot_outcome_comparison(agents, out_dir, fmt, test_set_label=test_set_label)
+
+    # ── 7. Combined summary (2×3 grid) ───────────────────────────────
+    _plot_combined_summary(agents, names, split_name, out_dir, fmt, test_set_label)
 
 
-def _plot_combined_summary(agents, names, split_name, out_dir, fmt):
+def _plot_combined_summary(agents, names, split_name, out_dir, fmt, test_set_label=""):
     """2×3 combined summary figure with tier and family data."""
+
     metric_keys = ["accuracy", "precision", "recall", "f1"]
     metric_labels = ["Accuracy", "Precision", "Recall", "F1"]
 
-    fig, axes = plt.subplots(2, 3, figsize=(20, 12))
-    fig.suptitle(f"Evaluation Summary — {split_name} Split", fontsize=16, fontweight="bold", y=0.98)
+    fig, axes = plt.subplots(2, 3, figsize=(24, 14))
+    fig.subplots_adjust(hspace=0.4, wspace=0.35)
+    fig.suptitle(f"Evaluation Summary — {split_name} Split",
+                 fontsize=18, fontweight="bold", color="#333333", y=0.99)
 
     # (a) Metrics comparison
     ax = axes[0, 0]
@@ -685,30 +804,40 @@ def _plot_combined_summary(agents, names, split_name, out_dir, fmt):
         r = agents[name]
         values = [r.get(k, 0) for k in metric_keys]
         offset = (i - len(names) / 2 + 0.5) * width
-        ax.bar(x + offset, values, width, label=_get_label(name), color=_get_color(name))
+        ax.bar(x + offset, values, width, label=_get_label(name),
+               color=_get_color(name), edgecolor="white", linewidth=0.8)
     ax.set_xticks(x)
     ax.set_xticklabels(metric_labels)
-    ax.set_ylim(0, 1.15)
-    ax.set_title("(a) Global Metrics")
-    ax.legend(fontsize=9)
-    ax.grid(True, axis="y", alpha=0.3)
+    ax.set_ylim(0.9, 1.02)
+    ax.set_title("(a) Classification Metrics", fontweight="bold")
+    ax.legend(fontsize=7, ncol=2)
 
-    # (b) TP/TN/FP/FN stacked
+    # (b) Confusion matrix of best agent
     ax = axes[0, 1]
-    categories = ["TP", "TN", "FP", "FN"]
-    cat_keys = ["tp", "tn", "fp", "fn"]
-    x = np.arange(len(names))
-    bottom = np.zeros(len(names))
-    cat_colors = ["#2ecc71", "#3498db", "#e74c3c", "#e67e22"]
-    for ci, (cat, ck) in enumerate(zip(categories, cat_keys)):
-        vals = [agents[n].get(ck, 0) for n in names]
-        ax.bar(x, vals, 0.6, bottom=bottom, label=cat, color=cat_colors[ci])
-        bottom += np.array(vals)
-    ax.set_xticks(x)
-    ax.set_xticklabels([_get_label(n) for n in names])
-    ax.set_title("(b) Outcome Breakdown")
-    ax.legend(fontsize=9)
-    ax.grid(True, axis="y", alpha=0.3)
+    best_name = max(names, key=lambda n: agents[n].get("f1", 0))
+    r = agents[best_name]
+    tp, tn, fp, fn = r.get("tp", 0), r.get("tn", 0), r.get("fp", 0), r.get("fn", 0)
+    cm = np.array([[tp, fn], [fp, tn]])
+    cm_total = tp + tn + fp + fn or 1
+    cm_visual = np.array([
+        [0.5, cm[0, 1] / max(cm_total, 1)],
+        [cm[1, 0] / max(cm_total, 1), 1.0],
+    ])
+    im = ax.imshow(cm_visual, cmap="Blues", vmin=0, vmax=1)
+    ax.set_xticks([0, 1])
+    ax.set_yticks([0, 1])
+    ax.set_xticklabels(["Bot", "Human"], fontsize=10)
+    ax.set_yticklabels(["Bot", "Human"], fontsize=10)
+    ax.set_xlabel("Predicted", fontsize=10)
+    ax.set_ylabel("True", fontsize=10)
+    ax.grid(False)
+    for i in range(2):
+        for j in range(2):
+            val = cm[i, j]
+            color = "white" if cm_visual[i, j] > 0.4 else "black"
+            ax.text(j, i, str(val), ha="center", va="center",
+                    fontsize=18, color=color)
+    ax.set_title(f"(b) Confusion Matrix ({_get_label(best_name)})", fontweight="bold")
 
     # (c) Per-tier detection rates (grouped)
     ax = axes[0, 2]
@@ -723,15 +852,15 @@ def _plot_combined_summary(agents, names, split_name, out_dir, fmt):
             tiers = agents[name].get("tiers", {})
             rates = [tiers.get(t, {}).get("rate", 0) for t in tier_nums]
             offset = (i - len(names) / 2 + 0.5) * width
-            ax.bar(x + offset, rates, width, label=_get_label(name), color=_get_color(name))
+            ax.bar(x + offset, rates, width, label=_get_label(name),
+                   color=_get_color(name), edgecolor="white", linewidth=0.8)
         tier_labels = [TIER_NAMES.get(t, f"T{t}") for t in tier_nums]
         ax.set_xticks(x)
         ax.set_xticklabels(tier_labels, rotation=20, ha="right", fontsize=9)
-        ax.set_ylim(0, 1.15)
+        ax.set_ylim(0, 1.12)
         ax.axhline(y=1.0, color="gray", linestyle="--", alpha=0.3)
-    ax.set_title("(c) Per-Tier Detection Rate")
-    ax.legend(fontsize=9)
-    ax.grid(True, axis="y", alpha=0.3)
+    ax.set_title("(c) Per-Tier Detection Rate", fontweight="bold")
+    ax.legend(fontsize=7, ncol=2)
 
     # (d) Action distributions (grouped)
     ax = axes[1, 0]
@@ -746,35 +875,44 @@ def _plot_combined_summary(agents, names, split_name, out_dir, fmt):
             acts = agents[name].get("actions", {})
             vals = [acts.get(a, 0) for a in all_actions]
             offset = (i - len(names) / 2 + 0.5) * bar_h
-            ax.barh(y + offset, vals, bar_h, label=_get_label(name), color=_get_color(name))
+            ax.barh(y + offset, vals, bar_h, label=_get_label(name),
+                    color=_get_color(name), edgecolor="white", linewidth=0.8)
         ax.set_yticks(y)
-        ax.set_yticklabels(all_actions)
+        ax.set_yticklabels(all_actions, fontsize=9)
     ax.set_xlabel("Count")
-    ax.set_title("(d) Final Actions")
-    ax.legend(fontsize=9)
-    ax.grid(True, axis="x", alpha=0.3)
+    ax.set_title("(d) Final Actions", fontweight="bold")
+    ax.legend(fontsize=7, ncol=2)
 
-    # (e) Per-family detection rate (first agent, as heatmap-lite)
+    # (e) Family heatmap (all agents)
     ax = axes[1, 1]
-    first_agent = names[0]
-    families = agents[first_agent].get("families", {})
-    if families:
-        sorted_fams = sorted(families.items(), key=lambda x: (x[1]["tier"], x[0]))
-        fam_names = [f for f, _ in sorted_fams]
-        rates = [d["rate"] for _, d in sorted_fams]
-        counts = [d["n"] for _, d in sorted_fams]
-        colors = [TIER_COLORS.get(d["tier"], "#95a5a6") for _, d in sorted_fams]
-        y = np.arange(len(fam_names))
-        bars = ax.barh(y, rates, color=colors, height=0.7)
-        for bar, rate, n in zip(bars, rates, counts):
-            ax.text(bar.get_width() + 0.02, bar.get_y() + bar.get_height() / 2,
-                    f"{rate:.0%} (n={n})", va="center", fontsize=9)
-        ax.set_yticks(y)
-        ax.set_yticklabels(fam_names, fontsize=9)
-        ax.set_xlim(0, 1.3)
-        ax.axvline(x=1.0, color="gray", linestyle="--", alpha=0.3)
-    ax.set_title(f"(e) Per-Family ({_get_label(first_agent)})")
-    ax.grid(True, axis="x", alpha=0.3)
+    all_families = set()
+    for name in names:
+        all_families.update(agents[name].get("families", {}).keys())
+    if all_families:
+        def _fam_sort(f):
+            for n in names:
+                info = agents[n].get("families", {}).get(f)
+                if info:
+                    return (info["tier"], f)
+            return (99, f)
+        families_sorted = sorted(all_families, key=_fam_sort)
+        matrix = np.zeros((len(names), len(families_sorted)))
+        for i, name in enumerate(names):
+            fam_data = agents[name].get("families", {})
+            for j, fam in enumerate(families_sorted):
+                matrix[i, j] = fam_data.get(fam, {}).get("rate", 0)
+        im = ax.imshow(matrix, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
+        for i in range(len(names)):
+            for j in range(len(families_sorted)):
+                rate = matrix[i, j]
+                color = "white" if rate < 0.4 or rate > 0.85 else "black"
+                ax.text(j, i, f"{rate:.0%}", ha="center", va="center",
+                        fontsize=8, fontweight="bold", color=color)
+        ax.set_xticks(np.arange(len(families_sorted)))
+        ax.set_yticks(np.arange(len(names)))
+        ax.set_xticklabels(families_sorted, rotation=35, ha="right", fontsize=8)
+        ax.set_yticklabels([_get_label(n) for n in names], fontsize=8)
+    ax.set_title("(e) Per-Family Detection Heatmap", fontweight="bold")
 
     # (f) Decision timing
     ax = axes[1, 2]
@@ -789,15 +927,15 @@ def _plot_combined_summary(agents, names, split_name, out_dir, fmt):
             r = agents[name]
             values = [r["human_avg_steps"], r["bot_avg_steps"]]
             offset = (i - len(names) / 2 + 0.5) * width
-            ax.bar(x + offset, values, width, label=_get_label(name), color=_get_color(name))
+            ax.bar(x + offset, values, width, label=_get_label(name),
+                   color=_get_color(name), edgecolor="white", linewidth=0.8)
         ax.set_xticks(x)
         ax.set_xticklabels(["Human", "Bot"])
     ax.set_ylabel("Avg Windows")
-    ax.set_title("(f) Decision Timing")
-    ax.legend(fontsize=9)
-    ax.grid(True, axis="y", alpha=0.3)
+    ax.set_title("(f) Decision Timing", fontweight="bold")
+    ax.legend(fontsize=7, ncol=2)
 
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
     fig.savefig(out_dir / f"eval_summary.{fmt}")
     plt.close(fig)
     print(f"  Saved eval_summary.{fmt}")
@@ -809,6 +947,8 @@ def main():
     parser.add_argument("--out", type=str, default="figures", help="Output directory for figures")
     parser.add_argument("--format", type=str, default="png", choices=["png", "pdf", "svg"],
                         help="Figure format (pdf recommended for papers)")
+    parser.add_argument("--augmented", action="store_true",
+                        help="Label figures as using augmented test set")
     args = parser.parse_args()
 
     log_path = Path(args.log)
@@ -827,7 +967,12 @@ def main():
         print("No evaluation data found in log file.")
         return
 
+    # Determine test-set label
+    test_set_label = "With Augmented Data" if args.augmented else "Standard (No Augmented)"
+    agents["_meta"]["test_set_label"] = test_set_label
+
     print(f"Found {len(agent_names)} agent(s): {', '.join(agent_names)}")
+    print(f"Test set: {test_set_label}")
     for name in agent_names:
         r = agents[name]
         print(f"  {name}: accuracy={r.get('accuracy', 'N/A')}, f1={r.get('f1', 'N/A')}")
@@ -838,10 +983,10 @@ def main():
 
     # Per-agent plots
     for name in agent_names:
-        plot_single(name, agents[name], out_dir, fmt=args.format)
+        plot_single(name, agents[name], out_dir, fmt=args.format, test_set_label=test_set_label)
 
     # Comparison plots (always generated, even for single agent)
-    plot_comparison(agents, out_dir, fmt=args.format)
+    plot_comparison(agents, out_dir, fmt=args.format, test_set_label=test_set_label)
 
     print(f"\nDone! Evaluation figures saved to {out_dir}/")
 

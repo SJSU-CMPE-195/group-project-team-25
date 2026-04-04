@@ -56,6 +56,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--eval-seeds", type=int, nargs="+", default=None,
                     help="Run evaluation with multiple RNG seeds and report "
                          "mean +/- std (e.g. --eval-seeds 42 123 456 789 1024)")
+    p.add_argument("--include-augmented", action="store_true",
+                    help="Include adversarially augmented bot sessions in evaluation")
     p.add_argument("--held-out-families", type=str, nargs="*", default=None,
                     help="Bot families to hold out from train/val (test-only)")
     p.add_argument("--held-out-tiers", type=int, nargs="*", default=None,
@@ -106,7 +108,7 @@ def main():
 
     # Load data
     print(f"Loading sessions from {args.data_dir}...")
-    sessions = load_from_directory(args.data_dir)
+    sessions = load_from_directory(args.data_dir, include_augmented=args.include_augmented)
     human_count = sum(1 for s in sessions if s.label == 1)
     bot_count = sum(1 for s in sessions if s.label == 0)
     print(f"  Loaded {len(sessions)} sessions ({human_count} human, {bot_count} bot)")
@@ -170,20 +172,33 @@ def main():
 
         if multi_seed:
             seed_metrics = []
-            combined_episodes = []
+            seed_episodes = []
             for seed in eval_seeds:
                 results = _run_evaluation(env, agent, args.episodes,
                                           agent_name=f"{name}/seed={seed}",
                                           eval_seed=seed)
-                combined_episodes.extend(results["episodes"])
+                seed_episodes.append(results["episodes"])
                 seed_metrics.append(_compute_metrics(results["episodes"]))
 
-            # Print per-seed results, then aggregated
-            all_results[name] = {"episodes": combined_episodes}
+            combined_episodes = [e for eps in seed_episodes for e in eps]
+            all_results[name] = {
+                "episodes": combined_episodes,
+                "seed_episodes": seed_episodes,
+            }
             all_multi_seed_metrics[name] = seed_metrics
+
+            # Pooled aggregate (all episodes as one)
             _print_results({"episodes": combined_episodes}, agent_name=name,
                            split_name=args.split)
-            _print_per_family_results({"episodes": combined_episodes}, agent_name=name)
+            _print_per_family_results({"episodes": combined_episodes},
+                                      agent_name=name)
+
+            # Mean +/- std across seeds
+            _print_results_multiseed(seed_metrics, eval_seeds,
+                                     agent_name=name, split_name=args.split,
+                                     episodes_per_seed=args.episodes)
+            _print_per_family_results_multiseed(seed_episodes, eval_seeds,
+                                                agent_name=name)
         else:
             results = _run_evaluation(env, agent, args.episodes, agent_name=name,
                                       eval_seed=eval_seeds[0])
@@ -193,11 +208,11 @@ def main():
 
     # Print comparison table if multiple agents
     if len(all_results) > 1:
-        _print_comparison(all_results, split_name=args.split)
-
-    # Print aggregated multi-seed summary
-    if multi_seed and all_multi_seed_metrics:
-        _print_multi_seed_summary(all_multi_seed_metrics, eval_seeds, args.split)
+        if multi_seed and all_multi_seed_metrics:
+            _print_comparison_multiseed(all_multi_seed_metrics, eval_seeds,
+                                        split_name=args.split)
+        else:
+            _print_comparison(all_results, split_name=args.split)
 
 
 def _run_evaluation(
@@ -376,6 +391,142 @@ def _print_results(results: dict, agent_name: str = "agent", split_name: str = "
     print()
 
 
+def _print_results_multiseed(
+    seed_metrics: list[dict],
+    seeds: list[int],
+    agent_name: str = "agent",
+    split_name: str = "test",
+    episodes_per_seed: int = 500,
+):
+    """Print mean +/- std evaluation summary across multiple seeds."""
+    n_seeds = len(seeds)
+    total_eps = n_seeds * episodes_per_seed
+
+    print(f"=== {agent_name.upper()} - {split_name.upper()} split "
+          f"({total_eps} episodes, {n_seeds} seeds) ===")
+    print()
+
+    rows = [
+        ("Accuracy",  "accuracy"),
+        ("Precision", "precision"),
+        ("Recall",    "recall"),
+        ("F1",        "f1"),
+        ("Avg Reward", "avg_reward"),
+        ("Avg Length", "avg_length"),
+    ]
+
+    for label, key in rows:
+        values = [m[key] for m in seed_metrics]
+        mean = np.mean(values)
+        std = np.std(values)
+        print(f"  {label:<14s} {mean:.3f} +/- {std:.3f}")
+    print()
+
+    # Confusion matrix (mean +/- std)
+    print("--- Confusion Matrix (mean +/- std across seeds) ---")
+    for label, key in [
+        ("True Positives  (bot blocked)",   "tp"),
+        ("True Negatives  (human allowed)", "tn"),
+        ("False Positives (human blocked)", "fp"),
+        ("False Negatives (bot allowed)",   "fn"),
+        ("Truncated (indecisive)",          "truncated"),
+    ]:
+        values = [m[key] for m in seed_metrics]
+        mean = np.mean(values)
+        std = np.std(values)
+        print(f"  {label}:  {mean:.1f} +/- {std:.1f}")
+    print()
+
+    # Per-seed breakdown
+    print("--- Per-Seed Breakdown ---")
+    print(f"  {'Seed':<10s} {'Acc':>8s} {'Prec':>8s} {'Recall':>8s} {'F1':>8s}")
+    print(f"  {'-' * 42}")
+    for i, seed in enumerate(seeds):
+        m = seed_metrics[i]
+        print(f"  {seed:<10d} {m['accuracy']:8.3f} {m['precision']:8.3f} "
+              f"{m['recall']:8.3f} {m['f1']:8.3f}")
+    print()
+
+
+def _print_per_family_results_multiseed(
+    seed_episodes: list[list[dict]],
+    seeds: list[int],
+    agent_name: str = "agent",
+):
+    """Print per-family and per-tier detection rates as mean +/- std across seeds."""
+    detected_outcomes = {"correct_block", "bot_blocked_puzzle"}
+
+    # Compute per-family detection rate for each seed
+    all_families: set[str] = set()
+    seed_family_rates: list[dict[str, float]] = []
+    seed_family_counts: list[dict[str, int]] = []
+    for episodes in seed_episodes:
+        bot_eps = [e for e in episodes if e["true_label"] == 0]
+        by_family: dict[str, list[dict]] = defaultdict(list)
+        for e in bot_eps:
+            family = e.get("bot_type") or "unknown"
+            by_family[family].append(e)
+            all_families.add(family)
+        rates = {}
+        counts = {}
+        for family, eps in by_family.items():
+            n = len(eps)
+            detected = sum(1 for e in eps if e["outcome"] in detected_outcomes)
+            rates[family] = detected / n if n > 0 else 0.0
+            counts[family] = n
+        seed_family_rates.append(rates)
+        seed_family_counts.append(counts)
+
+    print(f"--- Per-Family Bot Detection ({agent_name}, mean +/- std, {len(seeds)} seeds) ---")
+    print(f"  {'Family':<18s} {'Tier':>4s} {'N/seed':>7s} {'Rate':>14s}")
+    print(f"  {'-' * 45}")
+
+    for family in sorted(all_families):
+        rates = [r.get(family, 0.0) for r in seed_family_rates]
+        counts = [c.get(family, 0) for c in seed_family_counts]
+        mean_rate = np.mean(rates)
+        std_rate = np.std(rates)
+        avg_n = int(np.mean(counts))
+        tier = bot_type_to_tier(family if family != "unknown" else None)
+        tier_str = str(tier) if tier > 0 else "?"
+        print(f"  {family:<18s} {tier_str:>4s} {avg_n:>7d} "
+              f"{mean_rate:>7.1%} +/- {std_rate:.1%}")
+    print()
+
+    # Per-tier aggregation
+    all_tiers: set[int] = set()
+    seed_tier_rates: list[dict[int, float]] = []
+    seed_tier_counts: list[dict[int, int]] = []
+    for episodes in seed_episodes:
+        bot_eps = [e for e in episodes if e["true_label"] == 0]
+        by_tier: dict[int, list[dict]] = defaultdict(list)
+        for e in bot_eps:
+            tier = bot_type_to_tier(e.get("bot_type"))
+            by_tier[tier].append(e)
+            all_tiers.add(tier)
+        rates = {}
+        counts = {}
+        for tier_num, eps in by_tier.items():
+            n = len(eps)
+            detected = sum(1 for e in eps if e["outcome"] in detected_outcomes)
+            rates[tier_num] = detected / n if n > 0 else 0.0
+            counts[tier_num] = n
+        seed_tier_rates.append(rates)
+        seed_tier_counts.append(counts)
+
+    print(f"--- Per-Tier Summary ({agent_name}, mean +/- std, {len(seeds)} seeds) ---")
+    for tier_num in sorted(all_tiers):
+        rates = [r.get(tier_num, 0.0) for r in seed_tier_rates]
+        counts = [c.get(tier_num, 0) for c in seed_tier_counts]
+        mean_rate = np.mean(rates)
+        std_rate = np.std(rates)
+        avg_n = int(np.mean(counts))
+        tier_name = TIER_NAMES.get(tier_num, "Unknown")
+        print(f"  Tier {tier_num} ({tier_name}): ~{avg_n} bots, "
+              f"{mean_rate:.1%} +/- {std_rate:.1%}")
+    print()
+
+
 def _print_per_family_results(results: dict, agent_name: str = "agent"):
     """Print per-bot-family and per-tier detection rate breakdowns."""
     episodes = results["episodes"]
@@ -477,26 +628,26 @@ def _print_comparison(all_results: dict[str, dict], split_name: str = "test"):
     print()
 
 
-def _print_multi_seed_summary(
+def _print_comparison_multiseed(
     all_metrics: dict[str, list[dict]],
     seeds: list[int],
     split_name: str = "test",
 ):
-    """Print mean +/- std across multiple eval seeds for each agent."""
+    """Print side-by-side comparison with mean +/- std across seeds."""
     print()
     print("=" * 80)
-    print(f"  MULTI-SEED AGGREGATED RESULTS — {split_name.upper()} split "
-          f"({len(seeds)} seeds: {seeds})")
+    print(f"  COMPARISON TABLE — {split_name.upper()} split "
+          f"(mean +/- std, {len(seeds)} seeds: {seeds})")
     print("=" * 80)
 
     names = list(all_metrics.keys())
-    col_w = max(18, max(len(n) for n in names) + 2)
-    header = f"  {'Metric':<20s}" + "".join(f"{n:>{col_w}s}" for n in names)
+    col_w = max(20, max(len(n) for n in names) + 4)
+    header = f"  {'Metric':<16s}" + "".join(f"{n:>{col_w}s}" for n in names)
     print(header)
-    print("  " + "-" * (20 + col_w * len(names)))
+    print("  " + "-" * (16 + col_w * len(names)))
 
     rows = [
-        ("Accuracy",  "accuracy"),
+        ("Accuracy",   "accuracy"),
         ("Precision",  "precision"),
         ("Recall",     "recall"),
         ("F1",         "f1"),
@@ -504,29 +655,23 @@ def _print_multi_seed_summary(
     ]
 
     for label, key in rows:
-        row = f"  {label:<20s}"
+        row = f"  {label:<16s}"
         for name in names:
             values = [m[key] for m in all_metrics[name]]
             mean = np.mean(values)
             std = np.std(values)
-            row += f"{mean:>{col_w - 8}.3f} +/- {std:<.3f}"
+            row += f"{f'{mean:.3f} +/- {std:.3f}':>{col_w}s}"
         print(row)
 
     print()
 
-    # Per-seed breakdown
-    print(f"  {'':20s}", end="")
-    for name in names:
-        print(f"{name:>{col_w}s}", end="")
-    print()
-    print("  " + "-" * (20 + col_w * len(names)))
-    for i, seed in enumerate(seeds):
-        row = f"  {'Seed ' + str(seed):<20s}"
-        for name in names:
-            acc = all_metrics[name][i]["accuracy"]
-            f1 = all_metrics[name][i]["f1"]
-            row += f"{'acc=' + f'{acc:.3f}' + ' f1=' + f'{f1:.3f}':>{col_w}s}"
-        print(row)
+    # Highlight best (by mean)
+    best_acc = max(names, key=lambda n: np.mean([m["accuracy"] for m in all_metrics[n]]))
+    best_f1 = max(names, key=lambda n: np.mean([m["f1"] for m in all_metrics[n]]))
+    acc_mean = np.mean([m["accuracy"] for m in all_metrics[best_acc]])
+    f1_mean = np.mean([m["f1"] for m in all_metrics[best_f1]])
+    print(f"  Best accuracy: {best_acc} ({acc_mean:.3f})")
+    print(f"  Best F1:       {best_f1} ({f1_mean:.3f})")
     print()
 
 

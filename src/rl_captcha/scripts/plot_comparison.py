@@ -34,15 +34,15 @@ from rl_captcha.scripts.plot_eval import parse_log as parse_eval_log
 
 
 COLORS = {
-    "ppo": "#4a90e2",
-    "dg": "#e67e22",
-    "soft_ppo": "#2ecc71",
-    "ppo_noaug": "#4a90e2",
-    "dg_noaug": "#e67e22",
-    "soft_ppo_noaug": "#2ecc71",
-    "ppo_advaug": "#2a70c2",
-    "dg_advaug": "#c66e12",
-    "soft_ppo_advaug": "#1eac61",
+    "ppo": "#7bb3e0",
+    "dg": "#f0a870",
+    "soft_ppo": "#8bc7a0",
+    "ppo_noaug": "#7bb3e0",
+    "dg_noaug": "#f0a870",
+    "soft_ppo_noaug": "#8bc7a0",
+    "ppo_advaug": "#a0cff0",
+    "dg_advaug": "#f5c9a0",
+    "soft_ppo_advaug": "#b5dcc5",
 }
 LABELS = {
     "ppo": "PPO",
@@ -88,14 +88,28 @@ def plot_comparison(
     algos = list(all_rollouts.keys())
 
     plt.rcParams.update({
-        "font.family": "serif",
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Segoe UI", "Helvetica", "Arial", "DejaVu Sans"],
         "font.size": 11,
         "axes.titlesize": 13,
-        "axes.labelsize": 12,
-        "legend.fontsize": 10,
-        "figure.dpi": 300,
+        "axes.titleweight": "bold",
+        "axes.labelsize": 11,
+        "axes.labelcolor": "#444444",
+        "legend.fontsize": 9,
+        "figure.dpi": 200,
+        "figure.facecolor": "white",
+        "axes.facecolor": "#fafafa",
+        "axes.edgecolor": "#dddddd",
+        "axes.grid": True,
+        "grid.alpha": 0.25,
+        "grid.color": "#e0e0e0",
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "xtick.color": "#666666",
+        "ytick.color": "#666666",
         "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.15,
+        "savefig.pad_inches": 0.25,
+        "savefig.facecolor": "white",
     })
 
     # Precompute steps arrays
@@ -228,55 +242,61 @@ def plot_comparison(
             plt.close(fig)
             print(f"  Saved cmp_eval_metrics.{fmt}")
 
-            # ── 6. Confusion matrices side by side ───────────────────
-            n_eval = len(eval_algos)
-            fig, axes = plt.subplots(1, n_eval, figsize=(5 * n_eval, 4.5))
-            if n_eval == 1:
-                axes = [axes]
+            # ── 6. Confusion matrices (2-row grid, pastel blue) ─────────
+            from matplotlib.colors import LinearSegmentedColormap
+            teal_cmap = LinearSegmentedColormap.from_list(
+                "pastel_blue", ["#f0f4f8", "#c6ddf0", "#8ab8d8", "#5a9bc5"], N=256)
 
-            cmaps = {
-                "ppo": "Blues", "dg": "Oranges", "soft_ppo": "Greens",
-                "ppo_noaug": "Blues", "dg_noaug": "Oranges", "soft_ppo_noaug": "Greens",
-                "ppo_advaug": "Blues", "dg_advaug": "Oranges", "soft_ppo_advaug": "Greens",
-            }
-            for ax, algo in zip(axes, eval_algos):
+            n_eval = len(eval_algos)
+            if n_eval > 3:
+                n_rows, n_cols = 2, (n_eval + 1) // 2
+            else:
+                n_rows, n_cols = 1, n_eval
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=(4.5 * n_cols, 4.5 * n_rows))
+            axes_flat = np.array(axes).flatten()
+
+            for idx, algo in enumerate(eval_algos):
+                ax = axes_flat[idx]
                 result = all_evals[algo]
                 tp = result.get("tp", 0)
                 tn = result.get("tn", 0)
                 fp = result.get("fp", 0)
                 fn = result.get("fn", 0)
-                total = tp + tn + fp + fn or 1
-                cm = np.array([[tn, fp], [fn, tp]])
-                cm_pct = cm / total * 100
+                cm = np.array([[tp, fn], [fp, tn]])
 
-                cmap = cmaps.get(algo, "Greys")
-                im = ax.imshow(cm_pct, cmap=cmap, vmin=0, vmax=cm_pct.max() * 1.2)
+                im = ax.imshow(cm, cmap=teal_cmap, vmin=0, vmax=max(cm.max() * 1.2, 1))
                 ax.set_xticks([0, 1])
                 ax.set_yticks([0, 1])
-                ax.set_xticklabels(["Pred Human", "Pred Bot"])
-                ax.set_yticklabels(["True Human", "True Bot"])
+                ax.set_xticklabels(["Bot", "Human"], fontsize=10)
+                ax.set_yticklabels(["Bot", "Human"], fontsize=10)
+                if idx % n_cols == 0:
+                    ax.set_ylabel("Actual", fontsize=10, color="#555555")
+                ax.set_xlabel("Predicted", fontsize=10, color="#555555")
                 for i in range(2):
                     for j in range(2):
                         val = cm[i, j]
-                        pct = cm_pct[i, j]
-                        color = "white" if pct > cm_pct.max() * 0.6 else "black"
-                        ax.text(j, i, f"{val}\n({pct:.1f}%)", ha="center", va="center",
-                                fontsize=13, fontweight="bold", color=color)
+                        color = "#222222" if val < cm.max() * 0.6 else "white"
+                        ax.text(j, i, f"{val}", ha="center", va="center",
+                                fontsize=16, fontweight="bold", color=color)
                 acc = result.get("accuracy", 0)
-                f1 = result.get("f1", 0)
                 label = LABELS.get(algo, algo)
-                ax.set_title(f"{label} (Acc={acc:.3f}, F1={f1:.3f})")
+                ax.set_title(f"{label}\nAcc={acc:.3f}", fontsize=11,
+                             fontweight="bold", color="#444444", pad=10)
 
-            fig.suptitle("Confusion Matrices", fontsize=14, fontweight="bold")
-            fig.tight_layout(rect=[0, 0, 1, 0.93])
+            for idx in range(n_eval, len(axes_flat)):
+                axes_flat[idx].axis("off")
+
+            fig.suptitle("Confusion Matrices", fontsize=15, fontweight="bold", y=1.02)
+            fig.tight_layout()
             fig.savefig(out_dir / f"cmp_confusion.{fmt}")
             plt.close(fig)
             print(f"  Saved cmp_confusion.{fmt}")
 
     # ── 7. Combined summary (2×2 training-only) ─────────────────────
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig, axes = plt.subplots(2, 2, figsize=(16, 11))
+    fig.subplots_adjust(hspace=0.35, wspace=0.3)
     fig.suptitle("Algorithm Training Comparison",
-                 fontsize=16, fontweight="bold", y=0.98)
+                 fontsize=16, fontweight="bold", color="#333333", y=0.98)
 
     # (a) Reward
     ax = axes[0, 0]

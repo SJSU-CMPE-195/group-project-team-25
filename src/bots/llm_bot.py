@@ -489,7 +489,7 @@ async def run_llm_bot(provider: str = "anthropic", task: str | None = None,
         llm = ChatOpenAI(model="gpt-4o")
     elif provider == "gemini":
         from browser_use.llm import ChatGoogle
-        llm = ChatGoogle(model="gemini-2.5-flash")
+        llm = ChatGoogle(model="gemini-2.0-flash")
     else:
         print(f"Unknown provider: {provider}")
         sys.exit(1)
@@ -544,12 +544,6 @@ async def run_multiple(provider: str, runs: int, task: str | None,
         print("Error: browser-use not installed.")
         sys.exit(1)
 
-    browser = Browser(
-        headless=False,
-        disable_security=True,
-        args=["--no-first-run"],
-    )
-
     for i in range(runs):
         print(f"\n{'='*50}")
 
@@ -564,6 +558,13 @@ async def run_multiple(provider: str, runs: int, task: str | None,
         inject_label = " + event injection" if use_injection else ""
         print(f"LLM Bot Run {i + 1}/{runs} [mode: {current_mode}{inject_label}]")
         print(f"{'='*50}")
+
+        # Fresh browser per run so tracking.js gets a new session ID
+        browser = Browser(
+            headless=False,
+            disable_security=True,
+            args=["--no-first-run"],
+        )
 
         # Snapshot current session IDs so we can find the new one after
         known_ids = get_recent_session_ids()
@@ -587,6 +588,12 @@ async def run_multiple(provider: str, runs: int, task: str | None,
         # Confirm this was a bot so the RL agent can learn
         if session_id:
             confirm_bot(session_id)
+
+        # Close browser to ensure next run gets a fresh session
+        try:
+            await browser.close()
+        except Exception:
+            pass
 
         if i < runs - 1:
             print(f"Waiting {pause}s before next run...")
