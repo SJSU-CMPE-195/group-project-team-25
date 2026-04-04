@@ -8,7 +8,7 @@ Assumes you are in a venv already.
 pip install -r requirements.txt
 ```
 
-Script expects three data folders in the same directory.
+Script expects three data folders in the same directory.\
 Each folder should have json data files following the structure defined in /bot and /human READMEs
 
 Folders expected:
@@ -18,7 +18,7 @@ Folders expected:
 
 ### Usage
 
-2 Flags
+2 Flags\
 --event
 - mouse (Mouse movement events)
 - click (Mouse click events)
@@ -29,6 +29,7 @@ Folders expected:
 - checkout (Checkout page)
 
 ```bash
+Example:
 python gen_heatmap.py --event click --page checkout
 ```
 
