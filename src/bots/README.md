@@ -1,116 +1,178 @@
 # Bots
 
-Bot implementations for generating training data. Each bot drives a real Chrome browser against the live TicketMonarch site. The frontend's built-in `tracking.js` captures all telemetry automatically, and the bot auto-exports session data to `data/bot/` after each run.
+Bot implementations for generating labeled training data. Each bot drives a real Chrome browser through the full TicketMonarch booking flow. The site's built-in `tracking.js` captures all telemetry automatically.
 
-## Prerequisites
+## Before You Start
 
-- TicketMonarch running locally (`python TicketMonarch/backend/app.py` + `cd TicketMonarch/frontend && npm run dev`)
-- Chrome installed on your machine
+1. **TicketMonarch must be running** — backend + frontend (see below)
+2. **Chrome** must be installed on your machine
+3. **Virtual environment** must be activated with bot dependencies installed
 
 ## Setup
 
+All commands from the `src/` directory.
+
 ```bash
 pip install -r bots/requirements.txt
+```
 
-# For LLM bot only:
+For the LLM bot, also run:
+```bash
 pip install browser-use playwright langchain-anthropic
 playwright install chromium
 ```
+
+Start the app (two terminals):
+
+**PowerShell:**
+```powershell
+# Terminal 1 — Backend
+python TicketMonarch/backend/app.py
+
+# Terminal 2 — Frontend
+cd TicketMonarch/frontend
+npm run dev
+```
+
+---
 
 ## Selenium Bot
 
-Three behavior profiles for generating diverse bot data:
+Generates bot sessions with different behavior profiles.
 
-| Type | Mouse | Typing | Scrolls | Detection Difficulty |
-|------|-------|--------|---------|---------------------|
-| `linear` | Straight-line + light idle fidgeting | Uniform 20ms intervals | None | Easy |
-| `scripted` | Bezier curves + light idle fidgeting | Varied timing, burst typing | Human-like momentum scrolls | Medium |
-| `replay` | Replays recorded human mouse data + noise | Uniform-ish | Replayed from source | Hard |
-
-All bot types include small idle movements between actions, but these are intentionally limited so bot sessions stay closer to real checkout flows.
+| Type | Behavior | Difficulty |
+|------|----------|------------|
+| `linear` | Straight-line mouse, uniform typing | Easy |
+| `scripted` | Bezier curves, varied timing, scrolling | Medium |
+| `stealth` | Human-like Bezier with micro-jitter, lognormal typing | Hard |
+| `slow` | Slow, deliberate movements | Medium |
+| `erratic` | Irregular, jerky movements | Medium |
+| `speedrun` | Extremely fast completion | Easy |
+| `tabber` | Keyboard-heavy navigation | Easy |
+| `replay` | Replays a recorded human session with noise | Hard |
+| `semi_auto` | Mix of real human + bot actions | Very Hard |
+| `trace_conditioned` | Replays perturbed human traces | Very Hard |
+| `mixed` | Random mix of all types | Mixed |
 
 ### Commands
 
 ```bash
-# Scripted bot (default) -- Bezier curves, varied timing, scrolling, fidgeting
-python bots/selenium_bot.py --runs 10 --type scripted
+# 5 runs with scripted behavior (default type)
+python bots/selenium_bot.py --runs 5 --type scripted
 
-# Linear bot -- robotic straight-line movement, uniform typing
+# 5 linear bot runs
 python bots/selenium_bot.py --runs 5 --type linear
 
-# Replay bot -- replays real human mouse patterns with noise
-python bots/selenium_bot.py --runs 3 --type replay \
-    --replay-source data/human/session_example.json
+# 5 stealth bot runs
+python bots/selenium_bot.py --runs 5 --type stealth
+
+# 10 mixed runs (random bot types)
+python bots/selenium_bot.py --runs 10 --type mixed
+
+# Replay a recorded human session
+python bots/selenium_bot.py --runs 3 --type replay --replay-source data/human/session_example.json
+
+# Skip honeypot fields
+python bots/selenium_bot.py --runs 5 --type scripted --skip-honeypot
 ```
 
-### How It Works
+### All Flags
 
-1. Opens Chrome (no extension needed -- `tracking.js` captures everything)
-2. Sets `tm_is_bot=1` in sessionStorage so the confirmation page won't auto-confirm as human
-3. Runs the full booking flow for each run: Home -> Seat Selection -> Checkout -> Purchase
-4. Handles challenge modals if they appear (slider, canvas text, timed click -- up to 3 retries)
-5. After each run, waits for telemetry flush, then:
-   - Pulls raw telemetry from `/api/session/raw/<sid>`
-   - Saves JSON to `data/bot/` with a UTC timestamp filename
-   - Confirms the session as a bot (`true_label=0`) via `/api/agent/confirm`, triggering an online RL update
+| Flag | Default | What it does |
+|------|---------|--------------|
+| `--runs` | `3` | Number of sessions to run |
+| `--type` | `scripted` | Bot behavior type (see table above) |
+| `--replay-source` | — | Path to a human session JSON (required for `replay` type) |
+| `--pause-between` | `2.0` | Seconds to wait between runs |
+| `--skip-honeypot` | off | Skip unknown form fields to avoid honeypot traps |
 
-### Options
+### What happens each run
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--runs` | `3` | Number of bot sessions to run |
-| `--type` | `scripted` | Bot behavior: `linear`, `scripted`, `stealth`, `slow`, `erratic`, `speedrun`, `tabber`, `replay`, `semi_auto`, `trace_conditioned`, or `mixed` |
-| `--replay-source` | -- | Path to human session JSON (required for `replay`) |
-| `--pause-between` | `2.0` | Seconds between runs |
+1. Opens Chrome and navigates through Home → Seats → Checkout → Purchase
+2. If a challenge appears, the bot tries to solve it (up to 3 retries)
+3. After each run, saves telemetry to `data/bot/` and confirms as bot via the API
+
+---
 
 ## LLM Bot
 
-Uses [browser-use](https://github.com/browser-use/browser-use) to give an LLM (Claude or GPT-4o) autonomous control of Chrome. The LLM reads the page, decides where to click, what to type, and completes the booking flow on its own.
+Uses an LLM (Claude or GPT-4o) to autonomously control Chrome and complete the booking flow. Produces the most human-like bot behavior.
 
-### Setup
+### Set API keys
 
+**PowerShell:**
+```powershell
+$env:ANTHROPIC_API_KEY="sk-ant-..."
+# or for OpenAI:
+$env:OPENAI_API_KEY="sk-..."
+```
+
+**macOS / Linux:**
 ```bash
-pip install browser-use playwright langchain-anthropic
-playwright install chromium
-
-# Set your API key
 export ANTHROPIC_API_KEY=sk-ant-...
 # or for OpenAI:
-# pip install langchain-openai
-# export OPENAI_API_KEY=sk-...
+export OPENAI_API_KEY=sk-...
 ```
+
+### Important: Prevent data poisoning
+
+LLM bots that pass the RL agent's check get auto-saved as human data, which poisons the training set. To prevent this, set `DISABLE_HUMAN_SAVE=1` on the **backend** before running LLM bots:
+
+**PowerShell (restart backend with this):**
+```powershell
+$env:DISABLE_HUMAN_SAVE="1"
+$env:RL_ALGORITHM="ppo"
+python TicketMonarch/backend/app.py
+```
+
+**macOS / Linux:**
+```bash
+DISABLE_HUMAN_SAVE=1 RL_ALGORITHM=ppo python TicketMonarch/backend/app.py
+```
+
+This disables human session saving and human-label online learning updates while keeping bot-label saves and updates working normally. **Remove the env var when you go back to collecting human data.**
 
 ### Commands
 
 ```bash
-# Run with Claude (default)
+# 3 runs with Claude
 python bots/llm_bot.py --runs 3 --provider anthropic
 
-# Run with GPT-4o
+# 3 runs with GPT-4o
 python bots/llm_bot.py --runs 3 --provider openai
 
-# Custom task prompt
-python bots/llm_bot.py --task "Go to localhost:3000, browse concerts, pick the cheapest tickets"
+# Use DOM interaction mode (more telemetry)
+python bots/llm_bot.py --runs 3 --provider anthropic --mode dom
+
+# Skip honeypot fields
+python bots/llm_bot.py --runs 3 --provider anthropic --skip-honeypot
+
+# Enable DOM event injection (alternates on/off per run)
+python bots/llm_bot.py --runs 4 --provider anthropic --inject-events
 ```
 
-### Options
+### All Flags
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--runs` | `1` | Number of bot sessions |
-| `--provider` | `anthropic` | LLM provider: `anthropic` or `openai` |
+| Flag | Default | What it does |
+|------|---------|--------------|
+| `--runs` | `1` | Number of sessions to run |
+| `--provider` | `anthropic` | LLM provider: `anthropic`, `openai`, or `gemini` |
+| `--mode` | `screenshot` | Interaction mode: `screenshot`, `dom`, `accessibility`, or `mixed` |
 | `--pause-between` | `3.0` | Seconds between runs |
-| `--task` | *(full booking flow)* | Custom instruction prompt for the LLM |
+| `--task` | *(full booking flow)* | Custom instruction for the LLM |
+| `--inject-events` | off | Enable DOM event injection (alternates on/off per run) |
+| `--skip-honeypot` | off | Skip unknown form fields |
 
-### How It Works
+### What happens each run
 
-1. Opens Chrome (visible, not headless)
-2. The LLM autonomously navigates: browses concerts, selects seats, fills checkout
-3. `tracking.js` captures all telemetry in the background
-4. After each run, auto-exports telemetry to `data/bot/` and confirms as bot
+1. Opens a visible Chrome window
+2. The LLM reads the page and autonomously navigates the booking flow
+3. After each run, saves telemetry to `data/bot/` and confirms as bot via the API
 
-## Current Collection Notes
+---
 
-- Selenium bots still generate intentional mouse movement and pauses, but the movement inflation was reduced.
-- The optional LLM event injector no longer emits a continuous background mousemove loop; it now adds small movement bursts around focus and click actions only.
-- Because telemetry semantics changed, recollect fresh bot data before retraining.
+## Output
+
+Bot telemetry is saved as JSON files in `data/bot/`:
+- Selenium: `session_<session_id>.json`
+- LLM: `llm_bot_<timestamp>.json`

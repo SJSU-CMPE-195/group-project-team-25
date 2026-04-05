@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -573,10 +574,10 @@ def agent_confirm():
         )
 
         # ── Save session to JSON for training data ──
-        # Only save for human sessions; bot sessions are already exported
-        # by the bot scripts themselves.
+        # Set DISABLE_HUMAN_SAVE=1 when running LLM bots to prevent
+        # evasive bots from being saved as human data.
         json_path = None
-        if true_label == 1:
+        if true_label == 1 and not os.environ.get('DISABLE_HUMAN_SAVE'):
             data_dir = Path(__file__).resolve().parent.parent.parent / 'data' / 'human'
             data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -600,10 +601,15 @@ def agent_confirm():
                 print(f'[agent_confirm] Saved human session to {json_path.name}')
             except Exception as save_err:
                 print(f'[agent_confirm] WARNING: Failed to save JSON: {save_err}')
-                json_path = None  # Don't report success if save failed
+                json_path = None
 
         agent_svc = _get_agent_service()
-        result = agent_svc.online_learn(session, true_label)
+        # Skip online learning for human labels when DISABLE_HUMAN_SAVE is set
+        # (LLM bot mode) — the frontend auto-confirms with label=1 but it's actually a bot
+        if true_label == 1 and os.environ.get('DISABLE_HUMAN_SAVE'):
+            result = {'updated': False, 'reason': 'human_save_disabled'}
+        else:
+            result = agent_svc.online_learn(session, true_label)
         result['success'] = True
         result['session_id'] = session_id
         result['saved_json'] = str(json_path.name) if json_path else None

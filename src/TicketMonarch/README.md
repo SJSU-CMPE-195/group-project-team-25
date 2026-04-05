@@ -1,96 +1,111 @@
 # Ticket Monarch
 
-Developed by Team 25 - San Jose State University 
+A mock concert ticket-booking web app with real-time bot detection using reinforcement learning.
 
-Ticket Monarch is a mock web application for concert ticket booking.
-
-In this mock environment, users will browse concerts, select their seats, and checkout. During this process, the system tracks mouse movements, clicks, keystrokes, and scrolls.
-
-At checkout, a reinforcement learning agent (PPO, DG, or Soft PPO — all LSTM-based) evaluates the session, producing a bot vs. human detection output. The algorithm is selected via the `RL_ALGORITHM` environment variable (`ppo`, `dg`, or `soft_ppo`; defaults to `ppo`).
-
-## Project Structure
-
-## Setup
-
-### Prerequisites
+## Prerequisites
 
 - Python 3.12+
 - Node.js 18+
 - MySQL 8.0+
 
-### Database
+## Setup
+
+All commands from the `src/` directory.
+
+### 1. Database
 
 ```bash
-cp .env.example .env          # Edit and set MYSQL_PASSWORD
+cp TicketMonarch/.env.example TicketMonarch/.env
 ```
 
-### Backend
-
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate          # Windows (source venv/bin/activate on Mac/Linux)
-pip install -r requirements.txt
-pip install -r ../../rl_captcha/requirements.txt   # For agent inference
-python setup_mysql.py
+Edit `TicketMonarch/.env` and set your MySQL password:
+```
+MYSQL_HOST=localhost
+MYSQL_DATABASE=ticketmonarch_db
+MYSQL_USER=root
+MYSQL_PASSWORD=<your_password>
+MYSQL_PORT=3306
 ```
 
-### Frontend
-
+Create the database:
 ```bash
-cd frontend
-npm install
+python TicketMonarch/backend/setup_mysql.py
 ```
 
-### Running
-
-Open two terminals:
+### 2. Backend dependencies
 
 ```bash
-# Terminal 1: Backend
-cd TicketMonarch/backend
-venv\Scripts\activate
-set RL_ALGORITHM=dg            # ppo, dg, or soft_ppo (defaults to ppo)
-python app.py                  # http://localhost:5000
+pip install -r TicketMonarch/backend/requirements.txt
+pip install -r rl_captcha/requirements.txt
+```
 
-# Terminal 2: Frontend
+### 3. Frontend dependencies
+
+```bash
 cd TicketMonarch/frontend
-npm run dev                    # http://localhost:3000
+npm install
+cd ../..
 ```
 
-Vite proxies `/api/*` to Flask. Access the app at **http://localhost:3000**.
+---
+
+## Running
+
+Open two terminals (activate venv in each).
+
+**PowerShell:**
+```powershell
+# Terminal 1 — Backend (http://localhost:5000)
+$env:RL_ALGORITHM="ppo"    # Options: ppo, dg, soft_ppo (default: ppo)
+python TicketMonarch/backend/app.py
+
+# Terminal 2 — Frontend (http://localhost:3000)
+cd TicketMonarch/frontend
+npm run dev
+```
+
+**macOS / Linux:**
+```bash
+# Terminal 1
+RL_ALGORITHM=ppo python TicketMonarch/backend/app.py
+
+# Terminal 2
+cd TicketMonarch/frontend && npm run dev
+```
+
+Open **http://localhost:3000** in your browser.
+
+### Environment Variables
+
+| Variable | Default | What it does |
+|----------|---------|--------------|
+| `RL_ALGORITHM` | `ppo` | RL algorithm to use: `ppo`, `dg`, or `soft_ppo` |
+| `DISABLE_HUMAN_SAVE` | not set | Set to `1` to disable human session saving and human-label online learning. Use this when running LLM bots to prevent data poisoning. |
+
+**Example — backend for LLM bot data collection (PowerShell):**
+```powershell
+$env:RL_ALGORITHM="ppo"
+$env:DISABLE_HUMAN_SAVE="1"
+python TicketMonarch/backend/app.py
+```
+
+---
 
 ## User Flow
 
 1. **Home** (`/`) — Browse concerts, select one
-2. **Seat Selection** (`/seats/:id`) — Pick seats from interactive layout
-3. **Checkout** (`/checkout`) — Fill payment form
-   - Rolling inference polls every 3s and can request honeypot deployment
-   - On "Purchase": telemetry is force-flushed, then `/api/agent/evaluate` makes the final policy decision
-   - Policy outputs map directly to `allow`, `block`, or `easy/medium/hard` puzzle
-   - Honeypot triggered → instant hard puzzle
-4. **Confirmation** (`/confirmation`) — Order confirmed, session sent for online RL update, session resets
-
-## Telemetry
-
-The frontend captures behavioral signals and batches them to the backend every 5 seconds:
-
-| Signal | Rate | Data |
-|--------|------|------|
-| Mouse movement | sampled after real movement | x, y, timestamp |
-| Clicks | Every click | x, y, button, target element, time delta |
-| Keystrokes | Every key in form fields | field ID, down/up, timestamp, special keys only |
-| Scroll | Every scroll | scrollX, scrollY, delta, time delta |
-
-Telemetry writes are retried if the backend is temporarily unavailable, so failed flushes are not silently discarded.
+2. **Seat Selection** (`/seats/:id`) — Pick seats
+3. **Checkout** (`/checkout`) — Fill payment form, RL agent evaluates on Purchase
+4. **Confirmation** (`/confirmation`) — Order confirmed, session used for online learning
 
 ## Dev Dashboard
 
 Open **http://localhost:3000/dev** in a separate tab.
 
-**Live Monitor:** Auto-detects the active session from localStorage. Polls every 1s showing real-time counts (mouse, clicks, keystrokes, scrolls) and rolling bot probability.
+- **Live Monitor** — Real-time event counts and bot probability (polls every 1s)
+- **Analyze Session** — Full agent analysis: decision, action probabilities, LSTM heatmap
 
-**Analyze Session:** Full agent analysis on any session: decision banner, action probability bars, per-event timeline, LSTM hidden state heatmap (128 units).
+---
 
 ## API Endpoints
 
@@ -101,7 +116,7 @@ Open **http://localhost:3000/dev** in a separate tab.
 | POST | `/api/tracking/clicks` | Batch click events |
 | POST | `/api/tracking/keystrokes` | Batch keystroke timing |
 | POST | `/api/tracking/scroll` | Batch scroll events |
-| POST | `/api/agent/rolling` | Rolling inference (bot prob + honeypot deploy) |
+| POST | `/api/agent/rolling` | Rolling inference (bot prob + honeypot) |
 | POST | `/api/agent/evaluate` | Full agent evaluation at checkout |
 | POST | `/api/agent/confirm` | Online learning update (human/bot label) |
 | GET | `/api/agent/dashboard/<sid>` | Full agent analysis + LSTM state |
@@ -112,16 +127,3 @@ Open **http://localhost:3000/dev** in a separate tab.
 | GET | `/api/export/tracking` | Export telemetry to CSV |
 | GET | `/api/export` | Export checkout data to CSV |
 | GET | `/api/health` | Health check |
-
-## Database
-
-MySQL `ticketmonarch_db` with tables:
-- **checkouts** — Order form submissions
-- **user_sessions** — Telemetry in JSON columns (`mouse_movements`, `click_events`, `keystroke_data`, `scroll_events`).
-
-## Tech Stack
-
-- **Frontend**: React 18.2, Vite 5, React Router DOM 6, vanilla CSS, UUID v4
-- **Backend**: Python 3.12, Flask 3.0, Flask-CORS, mysql-connector-python
-- **Agent**: PyTorch PPO/DG/Soft-PPO+LSTM (lazy-loaded, thread-safe with Lock, algorithm selectable via `RL_ALGORITHM` env var)
-- **Database**: MySQL 8.0+

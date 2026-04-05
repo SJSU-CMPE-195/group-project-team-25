@@ -447,6 +447,9 @@ Go to {SITE_URL} and complete the full ticket booking flow:
 
 Act naturally - take your time browsing, move around the page,
 scroll through options before selecting.
+
+If you encounter a challenge or puzzle and fail it, STOP immediately.
+Do not retry the challenge. Just end the task.
 """
     if skip_honeypot:
         task += """

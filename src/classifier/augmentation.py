@@ -425,11 +425,11 @@ def adversarial_augment_sessions(
     rng = np.random.RandomState(random_state)
 
     print(f"  [HumanProfiler] Learned profile from {len(human_sessions)} human sessions:")
-    print(f"    key-hold   μ={profile.hold_mean:.1f} ms  σ={profile.hold_std:.1f} ms")
-    print(f"    mouse Δt   μ={profile.mouse_dt_mean:.1f} ms  σ={profile.mouse_dt_std:.1f} ms")
-    print(f"    mouse spd  μ={profile.speed_mean:.0f} px/s  σ={profile.speed_std:.0f} px/s")
-    print(f"    jitter     μ={profile.jitter_mean:.3f}  σ={profile.jitter_std:.3f}")
-    print(f"    dir-change μ={profile.dir_change_mean:.3f}  σ={profile.dir_change_std:.3f}")
+    print(f"    key-hold   mean={profile.hold_mean:.1f} ms  std={profile.hold_std:.1f} ms")
+    print(f"    mouse dt   mean={profile.mouse_dt_mean:.1f} ms  std={profile.mouse_dt_std:.1f} ms")
+    print(f"    mouse spd  mean={profile.speed_mean:.0f} px/s  std={profile.speed_std:.0f} px/s")
+    print(f"    jitter     mean={profile.jitter_mean:.3f}  std={profile.jitter_std:.3f}")
+    print(f"    dir-change mean={profile.dir_change_mean:.3f}  std={profile.dir_change_std:.3f}")
 
     # Step 2: generate augmented copies at each level
     augmented: list[Session] = []
