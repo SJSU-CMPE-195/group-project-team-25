@@ -25,7 +25,7 @@ jobs:
     needs: lint
     defaults:
       run:
-        working-directory: src/Ticketmonarch/frontend
+        working-directory: src/TicketMonarch/frontend
     steps:
       - uses: actions/checkout@v4
 
