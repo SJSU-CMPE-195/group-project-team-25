@@ -44,6 +44,11 @@ def parse_args() -> argparse.Namespace:
         help="Decision threshold for human vs bot (default: 0.5)",
     )
     p.add_argument(
+        "--include-augmented", action="store_true",
+        help="Include adversarially augmented bot sessions from data/bot_augmented/ "
+             "in the evaluation pool",
+    )
+    p.add_argument(
         "--verbose", action="store_true",
         help="Print per-session scores",
     )
@@ -78,7 +83,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     data_dir = Path(args.data_dir)
     print(f"[evaluate_classifier] Loading sessions from {data_dir.resolve()} ...")
-    sessions = load_from_directory(data_dir)
+    sessions = load_from_directory(data_dir, include_augmented=args.include_augmented)
     labeled  = [s for s in sessions if s.label is not None]
 
     if not labeled:
@@ -89,6 +94,10 @@ def main() -> None:
     bots   = [s for s in labeled if s.label == 0]
     print(f"  Human sessions : {len(humans)}")
     print(f"  Bot sessions   : {len(bots)}")
+    if args.include_augmented:
+        from classifier.data_loader import is_augmented as _is_aug
+        n_aug = sum(1 for s in labeled if _is_aug(s))
+        print(f"  (of which {n_aug} are pre-generated augmented bot sessions)")
 
     # ------------------------------------------------------------------
     # 3. Extract features and predict

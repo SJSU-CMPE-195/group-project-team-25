@@ -6,8 +6,14 @@ Usage (from repo root):
     # With hyperparameter tuning (requires optuna):
     python classifier/scripts/train_classifier.py --data-dir data/ --tune --n-trials 50
 
+    # With pre-generated adversarially augmented bot sessions (run
+    # generate_augmented_data.py first):
+    python classifier/scripts/train_classifier.py --data-dir data/ --adversarial-augment
+
 The script:
-    1. Loads labeled sessions from data/human/ (label=1) and data/bot/ (label=0)
+    1. Loads labeled sessions from data/human/ (label=1) and data/bot/ (label=0).
+       With --adversarial-augment, also loads pre-generated humanized bot
+       sessions from data/bot_augmented/ (added to the train split only).
     2. Splits data into train/test (80/20 stratified)
     3. Extracts 39 aggregate features per session
     4. Optionally tunes hyperparameters with Optuna
@@ -29,8 +35,7 @@ import numpy as np
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
-from classifier.augmentation import adversarial_augment_sessions
-from classifier.data_loader import load_from_directory
+from classifier.data_loader import is_augmented, load_from_directory
 from classifier.features import SessionFeatureExtractor, FEATURE_NAMES
 from classifier.model import HumanLikelihoodClassifier
 from rl_captcha.config import ClassifierConfig
@@ -59,12 +64,9 @@ def parse_args() -> argparse.Namespace:
         help="Disable feature-level adversarial augmentation",
     )
     p.add_argument(
-        "--no-humanizer", action="store_true",
-        help="Disable HumanProfiler raw-telemetry augmentation (easy/medium/hard)",
-    )
-    p.add_argument(
-        "--n-copies-per-level", type=int, default=2,
-        help="Augmented copies per bot per difficulty level (default: 2, total = N*3)",
+        "--adversarial-augment", action="store_true",
+        help="Include pre-generated adversarially augmented bot sessions "
+             "from data/bot_augmented/ (run generate_augmented_data.py first)",
     )
     p.add_argument(
         "--tune", action="store_true",
@@ -173,41 +175,48 @@ def main() -> None:
     # ------------------------------------------------------------------
     data_dir = Path(args.data_dir)
     print(f"[train_classifier] Loading sessions from {data_dir.resolve()} ...")
-    sessions = load_from_directory(data_dir)
+    sessions = load_from_directory(data_dir, include_augmented=args.adversarial_augment)
 
     labeled = [s for s in sessions if s.label is not None]
     if not labeled:
         print("ERROR: No labeled sessions found. Check data/human/ and data/bot/ directories.")
         sys.exit(1)
 
-    humans = [s for s in labeled if s.label == 1]
-    bots   = [s for s in labeled if s.label == 0]
+    # Separate originals from any pre-generated augmented copies; the test
+    # split must only contain originals so evaluation reflects the real-world
+    # distribution and augmented copies don't leak across the split.
+    originals = [s for s in labeled if not is_augmented(s)]
+    aug_sessions = [s for s in labeled if is_augmented(s)]
+
+    humans = [s for s in originals if s.label == 1]
+    bots   = [s for s in originals if s.label == 0]
     print(f"  Human sessions : {len(humans)}")
     print(f"  Bot sessions   : {len(bots)}")
+    print(f"  Augmented bots : {len(aug_sessions)}")
     print(f"  Total          : {len(labeled)}")
 
-    if len(labeled) < 4:
+    if len(originals) < 4:
         print(
-            "WARNING: Very few sessions available — classifier will be unreliable.\n"
+            "WARNING: Very few original sessions available — classifier will be unreliable.\n"
             "Collect more data before using this model in production."
         )
 
     # ------------------------------------------------------------------
-    # 2. Train / Test split (at session level, before augmentation)
+    # 2. Train / Test split (originals only; augmented copies join train)
     # ------------------------------------------------------------------
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-    y_labels = np.array([s.label for s in labeled], dtype=int)
+    y_labels = np.array([s.label for s in originals], dtype=int)
     train_idx, test_idx = train_test_split(
-        np.arange(len(labeled)),
+        np.arange(len(originals)),
         test_size=args.test_size,
         stratify=y_labels if len(np.unique(y_labels)) > 1 else None,
         random_state=args.random_state,
     )
 
-    train_sessions = [labeled[i] for i in train_idx]
-    test_sessions  = [labeled[i] for i in test_idx]
+    train_sessions = [originals[i] for i in train_idx]
+    test_sessions  = [originals[i] for i in test_idx]
 
     n_h_train = sum(1 for s in train_sessions if s.label == 1)
     n_b_train = sum(1 for s in train_sessions if s.label == 0)
@@ -218,20 +227,14 @@ def main() -> None:
     print(f"  Test set : {len(test_sessions)} ({n_h_test}H / {n_b_test}B)")
 
     # ------------------------------------------------------------------
-    # 2b. HumanProfiler adversarial augmentation (raw telemetry level)
+    # 2b. Add pre-generated humanized bot sessions to the train split only
     # ------------------------------------------------------------------
-    if not args.no_humanizer:
-        train_humans = [s for s in train_sessions if s.label == 1]
-        train_bots   = [s for s in train_sessions if s.label == 0]
-        augmented = adversarial_augment_sessions(
-            bot_sessions=train_bots,
-            human_sessions=train_humans,
-            n_copies_per_level=args.n_copies_per_level,
-            random_state=args.random_state,
-        )
-        train_sessions = train_sessions + augmented
+    if aug_sessions:
+        train_sessions = train_sessions + aug_sessions
         print(f"  Train set after augmentation: {len(train_sessions)} "
-              f"({n_h_train}H / {n_b_train + len(augmented)}B)")
+              f"({n_h_train}H / {n_b_train + len(aug_sessions)}B)")
+    elif args.adversarial_augment:
+        print("  WARNING: --adversarial-augment is on but no augmented sessions were loaded.")
 
     # ------------------------------------------------------------------
     # 3. Extract features
