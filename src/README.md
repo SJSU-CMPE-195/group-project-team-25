@@ -155,6 +155,6 @@ src/
 ├── TicketMonarch/          # Web app (Flask backend + React frontend)
 ├── rl_captcha/             # RL agents: PPO, DG, Soft PPO
 ├── bots/                   # Selenium & LLM bots
-├── data/                   # Training data (human/, bot/, bot_augmented/)
-└── chrome-extension/       # Telemetry capture extension
+├── classifier/             # XGBoost session-level classifier
+└── data/                   # Training data (human/, bot/, bot_augmented/)
 ```

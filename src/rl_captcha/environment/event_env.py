@@ -18,7 +18,7 @@ import gymnasium as gym
 import numpy as np
 
 from rl_captcha.config import EventEnvConfig
-from rl_captcha.data.loader import Session
+from rl_captcha.data.loader import Session, bot_type_to_tier
 
 ACTION_NAMES = [
     "continue", "deploy_honeypot",
@@ -34,6 +34,49 @@ EVENT_KEY_UP = 3
 EVENT_SCROLL = 4
 
 INTERACTIVE_TAGS = {"INPUT", "BUTTON", "A", "SELECT", "TEXTAREA"}
+
+
+def _honeypot_bot_trigger_prob(cfg: EventEnvConfig, meta: dict) -> float:
+    """Per-tier honeypot trigger rate for bots; fallback when tier unknown."""
+    tier = meta.get("tier")
+    if tier is None:
+        tier = bot_type_to_tier(meta.get("bot_type"))
+    try:
+        t = int(tier)
+    except (TypeError, ValueError):
+        t = None
+    rates = cfg.honeypot_trigger_rates_by_tier
+    if t is not None and t in rates:
+        return rates[t]
+    return cfg.honeypot_trigger_rate_bot_fallback
+
+
+def compute_terminal_reward(
+    cfg: EventEnvConfig,
+    action: int,
+    true_label: int,
+    metadata: dict,
+    rng: random.Random,
+) -> tuple[float, str]:
+    """Reward for terminal actions 2--6 (puzzles, allow, block). Shared with online training."""
+    if action in (2, 3, 4):
+        human_pass, bot_pass = cfg.puzzle_pass_rates[action]
+        if true_label == 1:
+            if rng.random() < human_pass:
+                return cfg.human_puzzle_friction[action], "human_passed_puzzle"
+            return cfg.penalty_human_puzzle_fail, "fp_puzzle"
+        if rng.random() < bot_pass:
+            return cfg.penalty_bot_passes_puzzle, "bot_passed_puzzle"
+        return cfg.puzzle_catch_rewards[action], "bot_blocked_puzzle"
+    if action == 5:
+        if true_label == 1:
+            return cfg.reward_correct_allow, "correct_allow"
+        return cfg.penalty_bot_missed_allow, "false_negative"
+    if action == 6:
+        if true_label == 0:
+            return cfg.reward_direct_block_bot, "correct_block"
+        return cfg.penalty_block_human, "false_positive_block"
+    raise ValueError(f"Not a terminal action: {action}")
 
 
 def _safe_var(arr: list[float]) -> float:
@@ -495,8 +538,10 @@ class EventEnv(gym.Env):
             else:
                 self._honeypot_deployed = True
                 self._num_honeypots += 1
+                meta = self._current_session.metadata or {}
                 if true_label == 0:
-                    triggered = random.random() < cfg.honeypot_trigger_rate_bot
+                    p_trig = _honeypot_bot_trigger_prob(cfg, meta)
+                    triggered = random.random() < p_trig
                 else:
                     triggered = random.random() < cfg.honeypot_trigger_rate_human
                 self._honeypot_triggered = triggered
@@ -508,43 +553,12 @@ class EventEnv(gym.Env):
                 else:
                     outcome = "honeypot_no_trigger"
 
-        elif action in (2, 3, 4):  # puzzle — terminal
+        elif action in (2, 3, 4, 5, 6):  # terminal decisions
             terminated = True
-            human_pass, bot_pass = cfg.puzzle_pass_rates[action]
-            if true_label == 1:
-                # Human gets puzzled — UX friction cost, worse penalty if they fail
-                if random.random() < human_pass:
-                    reward = -cfg.action_costs[action]  # minor UX friction only
-                    outcome = "human_passed_puzzle"
-                else:
-                    reward = cfg.penalty_false_positive  # human failed = false positive
-                    outcome = "fp_puzzle"
-            else:
-                # Bot gets puzzled — no cost, bot deserved the challenge
-                if random.random() < bot_pass:
-                    reward = cfg.penalty_false_negative * 0.5  # bot slipped through
-                    outcome = "bot_passed_puzzle"
-                else:
-                    reward = cfg.reward_correct_block  # caught the bot, full reward
-                    outcome = "bot_blocked_puzzle"
-
-        elif action == 5:  # allow — terminal
-            terminated = True
-            if true_label == 1:
-                reward = cfg.reward_correct_allow
-                outcome = "correct_allow"
-            else:
-                reward = cfg.penalty_false_negative
-                outcome = "false_negative"
-
-        elif action == 6:  # block — terminal
-            terminated = True
-            if true_label == 0:
-                reward = cfg.reward_correct_block
-                outcome = "correct_block"
-            else:
-                reward = cfg.penalty_false_positive
-                outcome = "false_positive_block"
+            meta = self._current_session.metadata or {}
+            reward, outcome = compute_terminal_reward(
+                cfg, action, true_label, meta, random.Random(),
+            )
 
         # Advance to next window for non-terminal actions
         if not terminated:

@@ -137,39 +137,27 @@ def plot_comparison(
     plt.close(fig)
     print(f"  Saved cmp_reward.{fmt}")
 
-    # ── 2. Training accuracy comparison ──────────────────────────────
-    def _correct_pcts(rollouts):
-        arr = []
-        for r in rollouts:
-            oc = r.get("outcomes", {})
-            arr.append(oc.get("correct_allow", 0) + oc.get("correct_block", 0)
-                       + oc.get("bot_blocked_puzzle", 0))
-        return np.array(arr)
-
+    # ── 2. Validation accuracy comparison ─────────────────────────────
     fig, ax = plt.subplots(figsize=(8, 4.5))
     for algo in algos:
-        acc = _correct_pcts(all_rollouts[algo])
-        color = COLORS.get(algo, "#999999")
-        label = LABELS.get(algo, algo)
-        ls = LINESTYLES.get(algo, "-")
-        ax.plot(steps_k[algo], smooth(acc, 10), color=color, linewidth=2, label=f"{label} (train)", linestyle=ls)
-
-        # Overlay val accuracy points
         vs, va = [], []
         for r in all_rollouts[algo]:
             if "val_accuracy" in r:
                 vs.append(r["steps"] / 1000)
                 va.append(r["val_accuracy"] * 100)
         if vs:
-            ax.plot(vs, va, "o--", color=color, linewidth=1.2, markersize=3,
-                    alpha=0.7, label=f"{label} (val)")
+            color = COLORS.get(algo, "#999999")
+            label = LABELS.get(algo, algo)
+            ls = LINESTYLES.get(algo, "-")
+            ax.plot(vs, va, "o-", color=color, linewidth=1.8, markersize=3,
+                    label=label, linestyle=ls)
 
     ax.set_xlabel("Training Steps (x1K)")
-    ax.set_ylabel("Correct Decisions (%)")
-    ax.set_title("Classification Accuracy Comparison")
+    ax.set_ylabel("Validation Accuracy (%)")
+    ax.set_title("Validation Accuracy During Training")
     ax.set_ylim(0, 105)
     ax.yaxis.set_major_formatter(ticker.PercentFormatter())
-    ax.legend(ncol=2)
+    ax.legend()
     ax.grid(True, alpha=0.3)
     fig.savefig(out_dir / f"cmp_accuracy.{fmt}")
     plt.close(fig)
@@ -192,22 +180,32 @@ def plot_comparison(
     plt.close(fig)
     print(f"  Saved cmp_entropy.{fmt}")
 
-    # ── 4. Policy Loss comparison ────────────────────────────────────
+    # ── 4. Training Correct Decision Rate ──────────────────────────
+    def _correct_pcts(rollouts):
+        arr = []
+        for r in rollouts:
+            oc = r.get("outcomes", {})
+            arr.append(oc.get("correct_allow", 0) + oc.get("correct_block", 0)
+                       + oc.get("bot_blocked_puzzle", 0))
+        return np.array(arr)
+
     fig, ax = plt.subplots(figsize=(8, 4.5))
     for algo in algos:
-        ploss = np.array([r.get("policy_loss", 0) for r in all_rollouts[algo]])
+        acc = _correct_pcts(all_rollouts[algo])
         color = COLORS.get(algo, "#999999")
         label = LABELS.get(algo, algo)
         ls = LINESTYLES.get(algo, "-")
-        ax.plot(steps_k[algo], smooth(ploss, 10), color=color, linewidth=2, label=label, linestyle=ls)
+        ax.plot(steps_k[algo], smooth(acc, 10), color=color, linewidth=2, label=label, linestyle=ls)
     ax.set_xlabel("Training Steps (x1K)")
-    ax.set_ylabel("Policy Loss")
-    ax.set_title("Policy Loss Comparison")
+    ax.set_ylabel("Correct Decisions (%)")
+    ax.set_title("Training Correct Decision Rate")
+    ax.set_ylim(0, 105)
+    ax.yaxis.set_major_formatter(ticker.PercentFormatter())
     ax.legend()
     ax.grid(True, alpha=0.3)
-    fig.savefig(out_dir / f"cmp_policy_loss.{fmt}")
+    fig.savefig(out_dir / f"cmp_train_decisions.{fmt}")
     plt.close(fig)
-    print(f"  Saved cmp_policy_loss.{fmt}")
+    print(f"  Saved cmp_train_decisions.{fmt}")
 
     # ── 5. Eval metrics bar chart ────────────────────────────────────
     if all_evals:
@@ -312,36 +310,28 @@ def plot_comparison(
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    # (b) Accuracy
+    # (b) Validation Accuracy
     ax = axes[0, 1]
     for algo in algos:
-        acc = _correct_pcts(all_rollouts[algo])
-        ax.plot(steps_k[algo], smooth(acc, 10), color=COLORS.get(algo),
-                linewidth=2, label=LABELS.get(algo, algo),
-                linestyle=LINESTYLES.get(algo, "-"))
+        vs, va = [], []
+        for r in all_rollouts[algo]:
+            if "val_accuracy" in r:
+                vs.append(r["steps"] / 1000)
+                va.append(r["val_accuracy"] * 100)
+        if vs:
+            ax.plot(vs, va, "o-", color=COLORS.get(algo),
+                    linewidth=1.8, markersize=3, label=LABELS.get(algo, algo),
+                    linestyle=LINESTYLES.get(algo, "-"))
     ax.set_xlabel("Steps (x1K)")
-    ax.set_ylabel("Correct (%)")
-    ax.set_title("(b) Train Accuracy")
+    ax.set_ylabel("Validation Accuracy (%)")
+    ax.set_title("(b) Validation Accuracy")
     ax.set_ylim(0, 105)
     ax.yaxis.set_major_formatter(ticker.PercentFormatter())
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    # (c) Policy Loss
+    # (c) Policy Entropy
     ax = axes[1, 0]
-    for algo in algos:
-        ploss = np.array([r.get("policy_loss", 0) for r in all_rollouts[algo]])
-        ax.plot(steps_k[algo], smooth(ploss, 10), color=COLORS.get(algo),
-                linewidth=2, label=LABELS.get(algo, algo),
-                linestyle=LINESTYLES.get(algo, "-"))
-    ax.set_xlabel("Steps (x1K)")
-    ax.set_ylabel("Policy Loss")
-    ax.set_title("(c) Policy Loss")
-    ax.legend(fontsize=9)
-    ax.grid(True, alpha=0.3)
-
-    # (d) Entropy
-    ax = axes[1, 1]
     for algo in algos:
         ent = np.array([r.get("entropy", 0) for r in all_rollouts[algo]])
         ax.plot(steps_k[algo], smooth(ent, 10), color=COLORS.get(algo),
@@ -349,7 +339,22 @@ def plot_comparison(
                 linestyle=LINESTYLES.get(algo, "-"))
     ax.set_xlabel("Steps (x1K)")
     ax.set_ylabel("Entropy")
-    ax.set_title("(d) Policy Entropy")
+    ax.set_title("(c) Policy Entropy")
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    # (d) Training Correct Decision Rate
+    ax = axes[1, 1]
+    for algo in algos:
+        acc = _correct_pcts(all_rollouts[algo])
+        ax.plot(steps_k[algo], smooth(acc, 10), color=COLORS.get(algo),
+                linewidth=2, label=LABELS.get(algo, algo),
+                linestyle=LINESTYLES.get(algo, "-"))
+    ax.set_xlabel("Steps (x1K)")
+    ax.set_ylabel("Correct Decisions (%)")
+    ax.set_title("(d) Training Correct Decision Rate")
+    ax.set_ylim(0, 105)
+    ax.yaxis.set_major_formatter(ticker.PercentFormatter())
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 

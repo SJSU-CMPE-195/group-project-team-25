@@ -180,6 +180,7 @@ python -m rl_captcha.scripts.plot_online --log online_training.log --out figures
 | 2 | Careful Automation | scripted, stealth, slow, erratic, replay |
 | 3 | Semi-Automated | semi_auto |
 | 4 | Trace-Conditioned | trace_conditioned |
+| 5 | LLM-Powered | llm (Claude, GPT-4o) |
 
 ---
 

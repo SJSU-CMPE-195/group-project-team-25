@@ -313,6 +313,18 @@ def _compute_metrics(episodes: list[dict]) -> dict:
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
     accuracy = (tp + tn) / n if n > 0 else 0.0
 
+    # Honeypot usage
+    honeypot_counts = [sum(1 for a in e["actions"] if a == 1) for e in episodes]
+    episodes_with_honeypot = sum(1 for c in honeypot_counts if c > 0)
+    avg_honeypots = float(np.mean(honeypot_counts)) if honeypot_counts else 0.0
+
+    # Action distribution across ALL steps (not just final)
+    all_actions = [a for e in episodes for a in e["actions"]]
+    action_dist = defaultdict(int)
+    for a in all_actions:
+        action_dist[a] += 1
+    total_actions = len(all_actions) if all_actions else 1
+
     return {
         "avg_reward": float(np.mean(rewards)),
         "std_reward": float(np.std(rewards)),
@@ -322,6 +334,10 @@ def _compute_metrics(episodes: list[dict]) -> dict:
         "precision": precision,
         "recall": recall,
         "f1": f1,
+        "honeypot_rate": episodes_with_honeypot / n if n > 0 else 0.0,
+        "avg_honeypots_per_ep": avg_honeypots,
+        "total_honeypots": sum(honeypot_counts),
+        "action_dist": {a: c / total_actions for a, c in action_dist.items()},
     }
 
 
@@ -378,10 +394,47 @@ def _print_results(results: dict, agent_name: str = "agent", split_name: str = "
         print(f"  {action:20s} {count:4d} ({100*count/n:.1f}%)")
     print()
 
-    # Decision timing by label
+    # Honeypot usage
+    honeypot_counts = [sum(1 for a in e["actions"] if a == 1) for e in episodes]
+    eps_with_hp = sum(1 for c in honeypot_counts if c > 0)
+    avg_hp = float(np.mean(honeypot_counts)) if honeypot_counts else 0.0
+    total_hp = sum(honeypot_counts)
+
+    print("--- Honeypot Usage ---")
+    print(f"  Episodes using honeypot: {eps_with_hp}/{n} ({100*eps_with_hp/n:.1f}%)")
+    print(f"  Avg honeypots per episode: {avg_hp:.2f}")
+    print(f"  Total honeypot deployments: {total_hp}")
+
+    # Honeypot usage by label
     human_eps = [e for e in episodes if e["true_label"] == 1]
     bot_eps = [e for e in episodes if e["true_label"] == 0]
+    if human_eps:
+        hp_human = [sum(1 for a in e["actions"] if a == 1) for e in human_eps]
+        print(f"  Honeypot on humans: {sum(1 for c in hp_human if c > 0)}/{len(human_eps)} "
+              f"({100*sum(1 for c in hp_human if c > 0)/len(human_eps):.1f}%), "
+              f"avg {np.mean(hp_human):.2f}/ep")
+    if bot_eps:
+        hp_bot = [sum(1 for a in e["actions"] if a == 1) for e in bot_eps]
+        print(f"  Honeypot on bots:   {sum(1 for c in hp_bot if c > 0)}/{len(bot_eps)} "
+              f"({100*sum(1 for c in hp_bot if c > 0)/len(bot_eps):.1f}%), "
+              f"avg {np.mean(hp_bot):.2f}/ep")
+    print()
 
+    # All-step action distribution (not just final)
+    all_actions = [a for e in episodes for a in e["actions"]]
+    action_step_counts = defaultdict(int)
+    for a in all_actions:
+        action_step_counts[a] += 1
+    total_steps = len(all_actions) if all_actions else 1
+
+    print("--- All-Step Action Distribution ---")
+    for idx in sorted(action_step_counts.keys()):
+        aname = ACTION_NAMES[idx] if 0 <= idx < len(ACTION_NAMES) else f"action_{idx}"
+        count = action_step_counts[idx]
+        print(f"  {aname:20s} {count:5d} ({100*count/total_steps:.1f}%)")
+    print()
+
+    # Decision timing by label
     if human_eps:
         avg_human_steps = np.mean([e["steps"] for e in human_eps])
         print(f"  Avg steps (human sessions): {avg_human_steps:.1f}")
@@ -413,6 +466,8 @@ def _print_results_multiseed(
         ("F1",        "f1"),
         ("Avg Reward", "avg_reward"),
         ("Avg Length", "avg_length"),
+        ("Honeypot %", "honeypot_rate"),
+        ("Avg HP/ep",  "avg_honeypots_per_ep"),
     ]
 
     for label, key in rows:
@@ -602,6 +657,8 @@ def _print_comparison(all_results: dict[str, dict], split_name: str = "test"):
         ("F1",         "f1",        ".3f"),
         ("Avg Reward", "avg_reward", ".3f"),
         ("Avg Length", "avg_length", ".1f"),
+        ("Honeypot %", "honeypot_rate", ".1%"),
+        ("Avg HP/ep",  "avg_honeypots_per_ep", ".2f"),
         ("TP (bot blocked)", "tp",  "d"),
         ("TN (human ok)",    "tn",  "d"),
         ("FP (human bad)",   "fp",  "d"),
@@ -652,6 +709,8 @@ def _print_comparison_multiseed(
         ("Recall",     "recall"),
         ("F1",         "f1"),
         ("Avg Reward", "avg_reward"),
+        ("Honeypot %", "honeypot_rate"),
+        ("Avg HP/ep",  "avg_honeypots_per_ep"),
     ]
 
     for label, key in rows:

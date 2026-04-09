@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import sys
 import threading
 from datetime import datetime, timezone
@@ -38,7 +39,7 @@ from rl_captcha.agent.dg_lstm import DGLSTM, DGConfig
 from rl_captcha.agent.soft_ppo_lstm import SoftPPOLSTM, SoftPPOConfig
 from rl_captcha.config import EventEnvConfig, PPOConfig
 from rl_captcha.data.loader import Session
-from rl_captcha.environment.event_env import EventEncoder, ACTION_NAMES
+from rl_captcha.environment.event_env import EventEncoder, ACTION_NAMES, compute_terminal_reward
 
 # Algorithm → default checkpoint subdirectory name
 _ALGO_DEFAULTS = {
@@ -335,15 +336,10 @@ class AgentService:
             action, log_prob, value = self.agent.select_action(obs, action_mask=mask)
 
             if is_last:
-                # terminal reward based on true label
-                if action == 5:  # allow
-                    reward = cfg.reward_correct_allow if true_label == 1 else cfg.penalty_false_negative
-                elif action == 6:  # block
-                    reward = cfg.reward_correct_block if true_label == 0 else cfg.penalty_false_positive
-                elif action in (2, 3, 4):  # puzzle
-                    reward = cfg.penalty_false_positive * 0.7 if true_label == 1 else cfg.reward_correct_block * 0.9
-                else:
-                    reward = -0.3  # should not happen with masking
+                meta = session.metadata if session.metadata else {}
+                reward, _out = compute_terminal_reward(
+                    cfg, action, true_label, meta, random.Random(),
+                )
                 done = True
             else:
                 reward = -cfg.continue_penalty

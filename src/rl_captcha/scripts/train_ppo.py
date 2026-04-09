@@ -117,6 +117,7 @@ def main():
         cfg.ppo.lr = args.lr
     if args.fp_penalty is not None:
         cfg.event_env.penalty_false_positive = args.fp_penalty
+        cfg.event_env.penalty_human_puzzle_fail = args.fp_penalty
 
     # Load data (include augmented bot sessions when --adversarial-augment is on)
     print(f"Loading sessions from {args.data_dir}...")

@@ -60,17 +60,17 @@ RE_TIER_LINE = re.compile(
     r"^\s+Tier\s+(\d+)\s+\(([^)]+)\):\s+(\d+)\s+bots?,\s+([\d.]+)%\s+detected"
 )
 
-# Pastel colors for algorithms
+# Algorithm colors — distinct hues, noaug=solid, advaug=lighter tint
 ALGO_COLORS = {
-    "ppo": "#7bb3e0",
-    "dg": "#f0a870",
-    "soft_ppo": "#b39ddb",
-    "ppo_noaug": "#7bb3e0",
-    "dg_noaug": "#f0a870",
-    "soft_ppo_noaug": "#b39ddb",
-    "ppo_advaug": "#a0cff0",
-    "dg_advaug": "#f5c9a0",
-    "soft_ppo_advaug": "#d1c4e9",
+    "ppo": "#4a90d9",
+    "dg": "#e8813a",
+    "soft_ppo": "#8b6bbf",
+    "ppo_noaug": "#4a90d9",          # blue
+    "dg_noaug": "#e8813a",           # orange
+    "soft_ppo_noaug": "#8b6bbf",     # purple
+    "ppo_advaug": "#89bbe8",         # light blue
+    "dg_advaug": "#f2b07a",          # light orange
+    "soft_ppo_advaug": "#b9a3d6",    # light purple
 }
 ALGO_LABELS = {
     "ppo": "PPO",
@@ -84,13 +84,13 @@ ALGO_LABELS = {
     "soft_ppo_advaug": "Soft PPO (adv aug)",
 }
 
-# Pastel tier colors
+# Tier colors — warm pastels matching the system diagram style
 TIER_COLORS = {
-    1: "#a8ddb5",   # soft green — commodity
-    2: "#a0c4e8",   # soft blue — careful automation
-    3: "#fdd49e",   # soft orange — semi-automated
-    4: "#f4a0a0",   # soft red — trace-conditioned
-    5: "#c9b0d8",   # soft purple — LLM-powered
+    1: "#7ec8a0",   # green — commodity
+    2: "#6aafe6",   # blue — careful automation
+    3: "#f5c462",   # warm yellow — semi-automated
+    4: "#e88e6e",   # salmon — trace-conditioned
+    5: "#b385d1",   # purple — LLM-powered
 }
 TIER_NAMES = {
     1: "T1: Commodity",
@@ -284,9 +284,7 @@ def _setup_style():
         "figure.facecolor": "white",
         "axes.facecolor": "#fafafa",
         "axes.edgecolor": "#dddddd",
-        "axes.grid": True,
-        "grid.alpha": 0.25,
-        "grid.color": "#e0e0e0",
+        "axes.grid": False,
         "axes.spines.top": False,
         "axes.spines.right": False,
         "xtick.color": "#666666",
@@ -347,8 +345,8 @@ def plot_single(name: str, result: dict, out_dir: Path, fmt: str = "png", test_s
     if actions:
         action_colors = {
             "allow": "#2ecc71", "block": "#e74c3c",
-            "easy_puzzle": "#f1c40f", "medium_puzzle": "#e67e22", "hard_puzzle": "#d35400",
-            "continue": "#95a5a6", "deploy_honeypot": "#3498db",
+            "easy_puzzle": "#f1c40f", "medium_puzzle": "#e8813a", "hard_puzzle": "#c0392b",
+            "continue": "#95a5a6", "deploy_honeypot": "#8b6bbf",
         }
         fig, ax = plt.subplots(figsize=(7, 4))
         action_names = list(actions.keys())
@@ -362,7 +360,7 @@ def plot_single(name: str, result: dict, out_dir: Path, fmt: str = "png", test_s
                     f"{count} ({pct:.1f}%)", va="center", fontsize=10)
         ax.set_xlabel("Count")
         ax.set_title(f"{label} — Final Action Distribution ({split_name})")
-        ax.grid(True, axis="x", alpha=0.3)
+        ax.grid(False)
         fig.savefig(out_dir / f"eval_{name}_actions.{fmt}")
         plt.close(fig)
         print(f"  Saved eval_{name}_actions.{fmt}")
@@ -411,7 +409,8 @@ def _plot_family_bars(name: str, families: dict, out_dir: Path, fmt: str, split_
     tier_nums = sorted(set(d["tier"] for _, d in sorted_fams))
     legend_handles = [Patch(color=TIER_COLORS.get(t, "#95a5a6"),
                             label=TIER_NAMES.get(t, f"Tier {t}")) for t in tier_nums]
-    ax.legend(handles=legend_handles, loc="lower right", fontsize=9)
+    ax.legend(handles=legend_handles, loc="upper center", bbox_to_anchor=(0.5, -0.06),
+              ncol=len(tier_nums), fontsize=8, frameon=False)
 
     fig.tight_layout()
     fig.savefig(out_dir / f"eval_{name}_per_family.{fmt}")
@@ -443,7 +442,7 @@ def _plot_tier_bars_single(name: str, tiers: dict, out_dir: Path, fmt: str, spli
     ax.set_ylabel("Detection Rate")
     ax.set_title(f"{label} — Per-Tier Detection Rate ({split_name})")
     ax.axhline(y=1.0, color="gray", linestyle="--", alpha=0.3)
-    ax.grid(True, axis="y", alpha=0.3)
+    ax.grid(False)
 
     fig.tight_layout()
     fig.savefig(out_dir / f"eval_{name}_per_tier.{fmt}")
@@ -501,10 +500,11 @@ def plot_tier_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png
     ax.set_ylabel("Detection Rate")
     ax.set_title(f"Per-Tier Detection Rate — Algorithm Comparison ({split_name})")
     ax.axhline(y=1.0, color="gray", linestyle="--", alpha=0.3)
-    ax.legend()
-    ax.grid(True, axis="y", alpha=0.3)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.10), ncol=3, fontsize=9, frameon=False)
+    ax.grid(False)
 
     fig.tight_layout()
+    fig.subplots_adjust(bottom=0.18)
     fig.savefig(out_dir / f"eval_tier_comparison.{fmt}")
     plt.close(fig)
     print(f"  Saved eval_tier_comparison.{fmt}")
@@ -601,17 +601,18 @@ def plot_outcome_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "
     # Build stacked segments: correct decisions, puzzle breakdown by difficulty, errors
     # Segment: (key, label, color, source)
     #   source="outcomes" reads from outcomes dict, source="actions" reads from actions dict
+    # Colors chosen for maximum distinguishability — no two similar shades
     segments = [
-        ("correct_allow", "Correct Allow", "#5b9bd5", "outcomes"),
-        ("correct_block", "Correct Block", "#2a6099", "outcomes"),
-        ("easy_puzzle", "Easy Puzzle", "#a9d18e", "actions"),
-        ("medium_puzzle", "Medium Puzzle", "#f4b183", "actions"),
-        ("hard_puzzle", "Hard Puzzle", "#c55a5a", "actions"),
-        ("human_passed_puzzle", "Human Passed Puzzle", "#8fbc8f", "outcomes"),
-        ("bot_passed_puzzle", "Bot Passed Puzzle", "#d98880", "outcomes"),
-        ("fp_puzzle", "Unnecessary Puzzle (Human)", "#f0b27a", "outcomes"),
-        ("false_negative", "False Negative", "#e07070", "outcomes"),
-        ("false_positive", "False Positive", "#edab76", "outcomes"),
+        ("correct_allow", "Correct Allow", "#4a90d9", "outcomes"),        # blue
+        ("correct_block", "Correct Block", "#2ecc71", "outcomes"),        # green
+        ("easy_puzzle", "Easy Puzzle", "#f1c40f", "actions"),             # yellow
+        ("medium_puzzle", "Medium Puzzle", "#e8813a", "actions"),         # orange
+        ("hard_puzzle", "Hard Puzzle", "#c0392b", "actions"),             # red
+        ("human_passed_puzzle", "Human Passed Puzzle", "#7ec8a0", "outcomes"),  # mint
+        ("bot_passed_puzzle", "Bot Passed Puzzle", "#e88e8e", "outcomes"),      # salmon
+        ("fp_puzzle", "Unnecessary Puzzle (Human)", "#d4a0d4", "outcomes"),     # mauve
+        ("false_negative", "False Negative", "#e74c3c", "outcomes"),      # bright red
+        ("false_positive", "False Positive", "#f39c12", "outcomes"),      # amber
     ]
 
     # Filter to segments that actually have data
@@ -668,7 +669,7 @@ def plot_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png", te
     x = np.arange(len(metric_keys))
     width = 0.8 / len(names)
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(10, 5.5))
     for i, name in enumerate(names):
         r = agents[name]
         values = [r.get(k, 0) for k in metric_keys]
@@ -677,15 +678,17 @@ def plot_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png", te
                       color=_get_color(name), edgecolor="white", linewidth=1)
         for bar, val in zip(bars, values):
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                    f"{val:.3f}", ha="center", va="bottom", fontsize=9, fontweight="bold")
+                    f"{val:.3f}", ha="center", va="bottom", fontsize=8, fontweight="bold")
 
     ax.set_xticks(x)
     ax.set_xticklabels(metric_labels)
     ax.set_ylim(0, 1.15)
     ax.set_ylabel("Score")
     ax.set_title(f"Evaluation Metrics Comparison — {split_name} Split")
-    ax.legend()
-    ax.grid(True, axis="y", alpha=0.3)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=3, fontsize=9, frameon=False)
+    ax.grid(False)
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.18)
     fig.savefig(out_dir / f"eval_metrics_comparison.{fmt}")
     plt.close(fig)
     print(f"  Saved eval_metrics_comparison.{fmt}")
@@ -766,8 +769,10 @@ def plot_comparison(agents: dict[str, dict], out_dir: Path, fmt: str = "png", te
         ax.set_xticklabels(["Human", "Bot"])
         ax.set_ylabel("Avg Windows Before Decision")
         ax.set_title(f"Decision Timing — {split_name} Split")
-        ax.legend()
-        ax.grid(True, axis="y", alpha=0.3)
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.10), ncol=3, fontsize=9, frameon=False)
+        ax.grid(False)
+        fig.tight_layout()
+        fig.subplots_adjust(bottom=0.18)
         fig.savefig(out_dir / f"eval_timing_comparison.{fmt}")
         plt.close(fig)
         print(f"  Saved eval_timing_comparison.{fmt}")
@@ -810,7 +815,7 @@ def _plot_combined_summary(agents, names, split_name, out_dir, fmt, test_set_lab
     ax.set_xticklabels(metric_labels)
     ax.set_ylim(0.9, 1.02)
     ax.set_title("(a) Classification Metrics", fontweight="bold")
-    ax.legend(fontsize=7, ncol=2)
+    ax.legend(fontsize=6, ncol=3, loc="lower left")
 
     # (b) Confusion matrix of best agent
     ax = axes[0, 1]
@@ -860,7 +865,7 @@ def _plot_combined_summary(agents, names, split_name, out_dir, fmt, test_set_lab
         ax.set_ylim(0, 1.12)
         ax.axhline(y=1.0, color="gray", linestyle="--", alpha=0.3)
     ax.set_title("(c) Per-Tier Detection Rate", fontweight="bold")
-    ax.legend(fontsize=7, ncol=2)
+    ax.legend(fontsize=6, ncol=3, loc="lower left")
 
     # (d) Action distributions (grouped)
     ax = axes[1, 0]
@@ -881,7 +886,7 @@ def _plot_combined_summary(agents, names, split_name, out_dir, fmt, test_set_lab
         ax.set_yticklabels(all_actions, fontsize=9)
     ax.set_xlabel("Count")
     ax.set_title("(d) Final Actions", fontweight="bold")
-    ax.legend(fontsize=7, ncol=2)
+    ax.legend(fontsize=6, ncol=3, loc="lower right")
 
     # (e) Family heatmap (all agents)
     ax = axes[1, 1]
@@ -933,7 +938,7 @@ def _plot_combined_summary(agents, names, split_name, out_dir, fmt, test_set_lab
         ax.set_xticklabels(["Human", "Bot"])
     ax.set_ylabel("Avg Windows")
     ax.set_title("(f) Decision Timing", fontweight="bold")
-    ax.legend(fontsize=7, ncol=2)
+    ax.legend(fontsize=6, ncol=3, loc="upper right")
 
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     fig.savefig(out_dir / f"eval_summary.{fmt}")

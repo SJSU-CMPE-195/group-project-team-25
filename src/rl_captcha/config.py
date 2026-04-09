@@ -108,26 +108,38 @@ class EventEnvConfig:
     min_events: int = 10              # skip sessions with fewer events
     max_windows: int = 256            # cap windows per episode (subsample if longer)
 
-    # Action costs (higher = worse UX friction for users)
+    # Action costs (continue / honeypot; puzzle friction for humans is human_puzzle_friction)
     action_costs: list[float] = field(
         default_factory=lambda: [
             0.0,    # continue
-            0.01,   # deploy_honeypot
-            0.10,   # easy_puzzle   — minor friction
-            0.30,   # medium_puzzle — noticeable friction
-            0.50,   # hard_puzzle   — major friction
-            0.0,    # allow
-            0.0,    # block
+            0.0,    # deploy_honeypot
+            0.0,    # easy_puzzle (unused — see human_puzzle_friction)
+            0.0, 0.0,
+            0.0, 0.0,
         ]
     )
 
-    # Reward structure
-    reward_correct_block: float = 1.0
-    reward_correct_allow: float = 0.5
-    penalty_false_positive: float = -1.0
-    penalty_false_negative: float = -0.8
-    continue_penalty: float = 0.001      # tiny per-window time pressure
-    honeypot_info_bonus: float = 0.3
+    # --- Reward structure (interactive CAPTCHA: puzzles can beat direct block on bots) ---
+    # Bot caught by puzzle (bot fails challenge) — evidence-based, tiered by difficulty
+    puzzle_catch_rewards: dict[int, float] = field(
+        default_factory=lambda: {2: 0.8, 3: 1.0, 4: 1.2},
+    )
+    # Human passes puzzle: UX friction only (negative)
+    human_puzzle_friction: dict[int, float] = field(
+        default_factory=lambda: {2: -0.05, 3: -0.20, 4: -0.40},
+    )
+    penalty_human_puzzle_fail: float = -1.0   # human fails puzzle (false alarm)
+    penalty_bot_passes_puzzle: float = -0.5   # bot slips through challenge
+
+    reward_direct_block_bot: float = 0.7      # block without puzzle evidence (less preferred)
+    penalty_block_human: float = -1.5         # direct block human — worst UX
+    penalty_bot_missed_allow: float = -1.0    # allow a bot (false negative)
+
+    reward_correct_allow: float = 0.5         # allow human
+    penalty_false_negative: float = -1.0      # kept for scripts; allow-bot uses penalty_bot_missed_allow
+    penalty_false_positive: float = -1.0      # legacy / train --fp-penalty (human puzzle fail)
+    continue_penalty: float = 0.001
+    honeypot_info_bonus: float = 0.5
     truncation_penalty: float = -0.5
     max_honeypots: int = 2
 
@@ -140,8 +152,17 @@ class EventEnvConfig:
         }
     )
 
-    # Honeypot trigger rates
-    honeypot_trigger_rate_bot: float = 0.6
+    # Tier-dependent honeypot trigger (bots); human rate fixed below
+    honeypot_trigger_rates_by_tier: dict[int, float] = field(
+        default_factory=lambda: {
+            1: 0.85,
+            2: 0.55,
+            3: 0.30,
+            4: 0.15,
+            5: 0.05,
+        },
+    )
+    honeypot_trigger_rate_bot_fallback: float = 0.55
     honeypot_trigger_rate_human: float = 0.01
 
     # Data augmentation (per-episode during training)
