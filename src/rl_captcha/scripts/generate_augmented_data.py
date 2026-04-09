@@ -19,12 +19,12 @@ import json
 import sys
 from pathlib import Path
 
+from classifier.augmentation import adversarial_augment_sessions
+from rl_captcha.data.loader import load_from_directory
+
 # Allow running from repo root or src/
 _SRC_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_SRC_ROOT))
-
-from classifier.augmentation import adversarial_augment_sessions
-from rl_captcha.data.loader import load_from_directory
 
 
 def _session_to_dict(session) -> dict:
@@ -121,7 +121,7 @@ def main():
     for s in augmented:
         lvl = s.metadata.get("aug_level", "unknown")
         levels[lvl] = levels.get(lvl, 0) + 1
-    print(f"\n  Summary:")
+    print("\n  Summary:")
     for lvl, count in sorted(levels.items()):
         print(f"    {lvl}: {count} sessions")
     print(f"    total: {len(augmented)} sessions")

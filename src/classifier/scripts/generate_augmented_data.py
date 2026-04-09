@@ -119,7 +119,7 @@ def main():
     for s in augmented:
         lvl = s.metadata.get("aug_level", "unknown")
         levels[lvl] = levels.get(lvl, 0) + 1
-    print(f"\n  Summary:")
+    print("\n  Summary:")
     for lvl, count in sorted(levels.items()):
         print(f"    {lvl}: {count} sessions")
     print(f"    total: {len(augmented)} sessions")

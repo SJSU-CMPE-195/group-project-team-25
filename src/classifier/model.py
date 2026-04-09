@@ -32,13 +32,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from rl_captcha.config import ClassifierConfig
 
 if TYPE_CHECKING:
     from classifier.data_loader import Session
     from classifier.features import SessionFeatureExtractor
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 class HumanLikelihoodClassifier:

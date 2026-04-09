@@ -306,7 +306,7 @@ def main() -> None:
     except ValueError:
         auc = float("nan")
 
-    print(f"\n--- Test Set Results ---")
+    print("\n--- Test Set Results ---")
     print(f"  Accuracy : {acc:.4f}")
     print(f"  F1 Score : {f1:.4f}")
     print(f"  ROC-AUC  : {auc:.4f}")

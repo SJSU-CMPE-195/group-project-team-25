@@ -43,7 +43,6 @@ from __future__ import annotations
 import argparse
 import time
 from collections import defaultdict
-from pathlib import Path
 
 import numpy as np
 
@@ -272,16 +271,16 @@ def main():
             config=cfg.ppo,
             device=args.device,
         )
-        print(f"  Algorithm: PPO")
+        print("  Algorithm: PPO")
     print(f"  Device: {agent.device}")
     print(f"  Rollout steps: {cfg.ppo.rollout_steps}")
     print(f"  Total timesteps: {cfg.ppo.total_timesteps}")
     if args.adversarial_augment:
         print(
-            f"  Adversarial augmentation: ON (augmented bot sessions loaded from data/bot_augmented/)"
+            "  Adversarial augmentation: ON (augmented bot sessions loaded from data/bot_augmented/)"
         )
     else:
-        print(f"  Adversarial augmentation: OFF")
+        print("  Adversarial augmentation: OFF")
     print()
 
     total_steps = 0

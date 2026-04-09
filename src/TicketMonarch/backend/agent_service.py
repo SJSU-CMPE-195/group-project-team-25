@@ -428,19 +428,28 @@ class AgentService:
 
         log = self._online_logger
         log.info(
-            f"--- Online Update #{self._online_update_count} [{self.algorithm.upper()}] | {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')} ---"
+            f" --- Online Update #{self._online_update_count} [{self.algorithm.upper()}] | "
+            f" {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')} --- "
         )
         log.info(
             f"  True label: {label_str} | Events: {len(timeline)} | Windows: {len(windows)}"
         )
         log.info(
-            f"  BEFORE: decision={before['decision']} p_allow={before.get('p_allow', 0):.4f} p_suspicious={before.get('p_suspicious', 0):.4f} {'CORRECT' if before_correct else 'WRONG'}"
+            f"  BEFORE: decision={before['decision']} "
+            f"p_allow={before.get('p_allow', 0):.4f} "
+            f"p_suspicious={before.get('p_suspicious', 0):.4f} "
+            f"{'CORRECT' if before_correct else 'WRONG'}"
         )
         log.info(
-            f"  AFTER:  decision={after['decision']} p_allow={after.get('p_allow', 0):.4f} p_suspicious={after.get('p_suspicious', 0):.4f} {'CORRECT' if after_correct else 'WRONG'}"
+            f" AFTER:  decision={after['decision']} "
+            f" p_allow={after.get('p_allow', 0):.4f} "
+            f" p_suspicious={after.get('p_suspicious', 0):.4f} "
+            f" {'CORRECT' if after_correct else 'WRONG'} "
         )
         log.info(
-            f"  Result: {improvement} | Policy loss: {metrics.get('policy_loss', 0):.4f} | Value loss: {metrics.get('value_loss', 0):.4f}"
+            f" Result: {improvement} | "
+            f" Policy loss: {metrics.get('policy_loss', 0):.4f} | "
+            f" Value loss: {metrics.get('value_loss', 0):.4f} "
         )
         log.info("")
 

@@ -20,24 +20,23 @@ Usage (from src/):
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
 import numpy as np
-
-# Add src to path
-src_dir = Path(__file__).resolve().parent.parent.parent
-if str(src_dir) not in sys.path:
-    sys.path.insert(0, str(src_dir))
 
 from rl_captcha.config import EventEnvConfig
 from rl_captcha.data.loader import (
     Session,
     load_from_directory,
     split_sessions,
-    BOT_TYPE_TO_TIER,
 )
+
+# Add src to path
+src_dir = Path(__file__).resolve().parent.parent.parent
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+
 from rl_captcha.environment.event_env import EventEncoder, EventEnv
 from rl_captcha.agent.ppo_lstm import PPOLSTM
 

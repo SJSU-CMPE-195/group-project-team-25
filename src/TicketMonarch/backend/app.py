@@ -1,7 +1,6 @@
 import json
 import os
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,7 +13,6 @@ from database import (
     save_user_session,
     export_tracking_data_to_csv,
     get_user_session,
-    get_user_sessions,
     get_recent_session_ids,
     get_session_summaries,
     ensure_indexes,
@@ -25,9 +23,10 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+from agent_service import get_agent_service as _init_agent_service
+
 # Agent loads once at startup — guaranteed ready before any request.
 print("[startup] Loading RL agent (PyTorch + LSTM checkpoint)...")
-from agent_service import get_agent_service as _init_agent_service
 
 _agent_ref = _init_agent_service()
 print("[startup] Agent ready.")

@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import re
-from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -350,7 +349,7 @@ def plot_single(
             val = cm[i, j]
             color = "white" if cm_visual[i, j] > 0.4 else "black"
             ax.text(j, i, str(val), ha="center", va="center", fontsize=22, color=color)
-    ax.set_title(f"Confusion Matrix", fontsize=14, fontweight="bold", pad=15)
+    ax.set_title("Confusion Matrix", fontsize=14, fontweight="bold", pad=15)
     fig.text(
         0.5,
         0.01,

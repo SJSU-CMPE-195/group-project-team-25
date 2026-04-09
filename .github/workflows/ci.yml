@@ -18,4 +18,4 @@ jobs:
       - name: Check formatting
         run: black --check src/ tests/
       - name: Lint
-        run: flake8 src/ tests/ --max-line-length=121 --extend-ignore=E203 --exit-zero
+        run: flake8 src/ tests/ --max-line-length=121 --extend-ignore=E203,E402 --exit-zero
