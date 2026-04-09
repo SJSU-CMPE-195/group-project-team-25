@@ -45,16 +45,29 @@ def _session_to_dict(session) -> dict:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Generate adversarially augmented bot sessions "
-                    "(same pipeline as classifier Section 3.5.3)"
+        "(same pipeline as classifier Section 3.5.3)"
     )
-    p.add_argument("--data-dir", type=str, default="data/",
-                    help="Path to data directory with human/ and bot/ subdirs")
-    p.add_argument("--out-dir", type=str, default=None,
-                    help="Output directory (default: <data-dir>/bot_augmented)")
-    p.add_argument("--n-copies", type=int, default=2,
-                    help="Number of augmented copies per bot per difficulty level (default: 2)")
-    p.add_argument("--seed", type=int, default=42,
-                    help="Random seed for reproducibility")
+    p.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/",
+        help="Path to data directory with human/ and bot/ subdirs",
+    )
+    p.add_argument(
+        "--out-dir",
+        type=str,
+        default=None,
+        help="Output directory (default: <data-dir>/bot_augmented)",
+    )
+    p.add_argument(
+        "--n-copies",
+        type=int,
+        default=2,
+        help="Number of augmented copies per bot per difficulty level (default: 2)",
+    )
+    p.add_argument(
+        "--seed", type=int, default=42, help="Random seed for reproducibility"
+    )
     return p.parse_args()
 
 

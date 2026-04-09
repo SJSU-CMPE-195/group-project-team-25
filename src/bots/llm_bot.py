@@ -48,7 +48,6 @@ import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 SITE_URL = "http://localhost:3000"
 API_URL = "http://localhost:5000"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "bot"
@@ -147,8 +146,9 @@ def api_post(path: str, body: dict, timeout: int = 10) -> dict | None:
     try:
         url = f"{API_URL}{path}"
         data = json.dumps(body).encode()
-        req = urllib.request.Request(url, data=data,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(
+            url, data=data, headers={"Content-Type": "application/json"}
+        )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
     except Exception as e:
@@ -187,12 +187,14 @@ def save_telemetry_json(session_id: str, raw: dict, run_index: int) -> Path:
         "source": "live_confirm",
         "bot_type": "llm",
         "tier": 5,
-        "segments": [{
-            "mouse": mouse,
-            "clicks": clicks,
-            "keystrokes": keystrokes,
-            "scroll": scroll,
-        }],
+        "segments": [
+            {
+                "mouse": mouse,
+                "clicks": clicks,
+                "keystrokes": keystrokes,
+                "scroll": scroll,
+            }
+        ],
     }
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%f")
@@ -287,7 +289,13 @@ async def _get_accessibility_tree(browser, max_chars: int = 4000) -> str | None:
             for prop in node.get("properties", []):
                 prop_name = prop.get("name", "")
                 prop_val = prop.get("value", {}).get("value", "")
-                if prop_name in ("focusable", "editable", "required", "disabled", "checked"):
+                if prop_name in (
+                    "focusable",
+                    "editable",
+                    "required",
+                    "disabled",
+                    "checked",
+                ):
                     if prop_val:
                         props.append(prop_name)
 
@@ -347,7 +355,9 @@ async def _read_session_id_from_browser(browser) -> str | None:
     return None
 
 
-async def extract_and_save(browser, run_index: int, known_session_ids: list[str]) -> str | None:
+async def extract_and_save(
+    browser, run_index: int, known_session_ids: list[str]
+) -> str | None:
     """Extract telemetry from Flask backend and save to data/bot/.
 
     Uses three strategies to find the session ID:
@@ -403,8 +413,10 @@ async def extract_and_save(browser, run_index: int, known_session_ids: list[str]
         print("  WARNING: Session exists but has 0 events")
         return None
 
-    print(f"  Events: {mouse_count} mouse, {click_count} clicks, "
-          f"{key_count} keystrokes, {scroll_count} scroll")
+    print(
+        f"  Events: {mouse_count} mouse, {click_count} clicks, "
+        f"{key_count} keystrokes, {scroll_count} scroll"
+    )
 
     out_path = save_telemetry_json(session_id, raw, run_index)
     print(f"  Saved: {out_path.name} ({total} events)")
@@ -413,16 +425,24 @@ async def extract_and_save(browser, run_index: int, known_session_ids: list[str]
 
 def confirm_bot(session_id: str) -> None:
     """Tell the RL agent this session was a bot so it can learn."""
-    print("  Confirming bot label + triggering online RL update (this may take a minute)...")
-    result = api_post("/api/agent/confirm", {
-        "session_id": session_id,
-        "true_label": 0,  # 0 = bot
-    }, timeout=120)  # PPO update on large sessions can take >10s
+    print(
+        "  Confirming bot label + triggering online RL update (this may take a minute)..."
+    )
+    result = api_post(
+        "/api/agent/confirm",
+        {
+            "session_id": session_id,
+            "true_label": 0,  # 0 = bot
+        },
+        timeout=120,
+    )  # PPO update on large sessions can take >10s
     if result and result.get("success"):
         updated = result.get("updated", False)
         if updated:
             metrics = result.get("metrics", {})
-            print(f"  RL agent updated! (loss: {metrics.get('policy_loss', '?')}, steps: {result.get('steps', '?')})")
+            print(
+                f"  RL agent updated! (loss: {metrics.get('policy_loss', '?')}, steps: {result.get('steps', '?')})"
+            )
         else:
             print(f"  RL agent confirmed (no update: {result.get('reason', '?')})")
     else:
@@ -461,9 +481,14 @@ them completely. They may be hidden traps.
     return task
 
 
-async def run_llm_bot(provider: str = "anthropic", task: str | None = None,
-                      browser=None, inject_events: bool = False,
-                      mode: str = "screenshot", skip_honeypot: bool = False):
+async def run_llm_bot(
+    provider: str = "anthropic",
+    task: str | None = None,
+    browser=None,
+    inject_events: bool = False,
+    mode: str = "screenshot",
+    skip_honeypot: bool = False,
+):
     """Run a single LLM bot session.
 
     Args:
@@ -486,12 +511,15 @@ async def run_llm_bot(provider: str = "anthropic", task: str | None = None,
 
     if provider == "anthropic":
         from browser_use import ChatAnthropic
+
         llm = ChatAnthropic(model="claude-sonnet-4-20250514")
     elif provider == "openai":
         from browser_use import ChatOpenAI
+
         llm = ChatOpenAI(model="gpt-4o")
     elif provider == "gemini":
         from browser_use.llm import ChatGoogle
+
         llm = ChatGoogle(model="gemini-2.0-flash")
     else:
         print(f"Unknown provider: {provider}")
@@ -509,7 +537,7 @@ async def run_llm_bot(provider: str = "anthropic", task: str | None = None,
         await _inject_event_script(browser)
 
     # Configure agent based on perception mode
-    use_vision = (mode == "screenshot")
+    use_vision = mode == "screenshot"
     extend_msg = None
 
     if mode == "accessibility":
@@ -525,7 +553,9 @@ async def run_llm_bot(provider: str = "anthropic", task: str | None = None,
             )
             print(f"  Accessibility tree extracted ({len(ax_tree)} chars)")
         else:
-            print("  WARNING: Could not extract accessibility tree, falling back to DOM-only")
+            print(
+                "  WARNING: Could not extract accessibility tree, falling back to DOM-only"
+            )
 
     agent_kwargs = dict(task=task, llm=llm, browser=browser, use_vision=use_vision)
     if extend_msg:
@@ -537,9 +567,15 @@ async def run_llm_bot(provider: str = "anthropic", task: str | None = None,
     return browser
 
 
-async def run_multiple(provider: str, runs: int, task: str | None,
-                       pause: float, inject_events: bool = False,
-                       mode: str = "mixed", skip_honeypot: bool = False):
+async def run_multiple(
+    provider: str,
+    runs: int,
+    task: str | None,
+    pause: float,
+    inject_events: bool = False,
+    mode: str = "mixed",
+    skip_honeypot: bool = False,
+):
     """Run multiple LLM bot sessions."""
     try:
         from browser_use import Browser
@@ -605,7 +641,7 @@ async def run_multiple(provider: str, runs: int, task: str | None,
     print(f"\n{'='*50}")
     print("All runs complete!")
     print(f"Telemetry saved to: {DATA_DIR}")
-    print("="*50)
+    print("=" * 50)
 
     if sys.stdin.isatty():
         input("Press Enter to close the browser...")
@@ -615,39 +651,54 @@ async def run_multiple(provider: str, runs: int, task: str | None,
 def main():
     parser = argparse.ArgumentParser(description="Run LLM-powered bot")
     parser.add_argument("--runs", type=int, default=1)
-    parser.add_argument("--provider", choices=["anthropic", "openai", "gemini"], default="anthropic")
+    parser.add_argument(
+        "--provider", choices=["anthropic", "openai", "gemini"], default="anthropic"
+    )
     parser.add_argument("--pause-between", type=float, default=3.0)
     parser.add_argument("--task", type=str, default=None)
-    parser.add_argument("--inject-events", action="store_true",
-                        help="Inject DOM events so tracking.js captures full telemetry. "
-                             "Alternates: even runs get injection, odd runs don't.")
-    parser.add_argument("--mode", choices=["screenshot", "dom", "accessibility", "mixed"],
-                        default="mixed",
-                        help="Perception mode: screenshot (vision), dom (text-only), "
-                             "accessibility (accessibility tree context), or mixed (cycles all three)")
-    parser.add_argument("--skip-honeypot", action="store_true",
-                        help="Tell LLM to skip unknown/hidden form fields (avoids honeypot traps)")
+    parser.add_argument(
+        "--inject-events",
+        action="store_true",
+        help="Inject DOM events so tracking.js captures full telemetry. "
+        "Alternates: even runs get injection, odd runs don't.",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["screenshot", "dom", "accessibility", "mixed"],
+        default="mixed",
+        help="Perception mode: screenshot (vision), dom (text-only), "
+        "accessibility (accessibility tree context), or mixed (cycles all three)",
+    )
+    parser.add_argument(
+        "--skip-honeypot",
+        action="store_true",
+        help="Tell LLM to skip unknown/hidden form fields (avoids honeypot traps)",
+    )
     args = parser.parse_args()
 
     mode_label = f"mode: {args.mode}"
     inject_label = " + alternating injection" if args.inject_events else ""
     honeypot_label = " + skip-honeypot" if args.skip_honeypot else ""
-    print(f"LLM Bot ({args.provider}) - {args.runs} runs [{mode_label}{inject_label}{honeypot_label}]")
+    print(
+        f"LLM Bot ({args.provider}) - {args.runs} runs [{mode_label}{inject_label}{honeypot_label}]"
+    )
     print(f"Target: {SITE_URL}")
     print(f"Output: {DATA_DIR}")
     print()
     print("Make sure backend (python app.py) and frontend (npm run dev) are running!")
     print()
 
-    asyncio.run(run_multiple(
-        provider=args.provider,
-        runs=args.runs,
-        task=args.task,
-        pause=args.pause_between,
-        inject_events=args.inject_events,
-        mode=args.mode,
-        skip_honeypot=args.skip_honeypot,
-    ))
+    asyncio.run(
+        run_multiple(
+            provider=args.provider,
+            runs=args.runs,
+            task=args.task,
+            pause=args.pause_between,
+            inject_events=args.inject_events,
+            mode=args.mode,
+            skip_honeypot=args.skip_honeypot,
+        )
+    )
 
 
 if __name__ == "__main__":

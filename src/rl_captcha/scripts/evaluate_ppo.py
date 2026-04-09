@@ -29,8 +29,11 @@ import numpy as np
 
 from rl_captcha.config import Config
 from rl_captcha.data.loader import (
-    load_from_directory, split_sessions, split_sessions_by_family,
-    bot_type_to_tier, TIER_NAMES,
+    load_from_directory,
+    split_sessions,
+    split_sessions_by_family,
+    bot_type_to_tier,
+    TIER_NAMES,
 )
 from rl_captcha.environment.event_env import EventEnv, ACTION_NAMES
 from rl_captcha.agent.ppo_lstm import PPOLSTM
@@ -40,28 +43,67 @@ from rl_captcha.agent.soft_ppo_lstm import SoftPPOLSTM, SoftPPOConfig
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Evaluate PPO/DG/Soft-PPO+LSTM agents")
-    p.add_argument("--agent", type=str, nargs="+", required=True,
-                    help="Agent checkpoint(s). Either plain paths or name=path pairs "
-                         "(e.g. ppo=checkpoints/ppo_run1 dg=checkpoints/dg_run1)")
-    p.add_argument("--data-dir", type=str, default="data/",
-                    help="Path to data directory with human/ and bot/ subdirs")
-    p.add_argument("--episodes", type=int, default=500,
-                    help="Number of episodes to evaluate per agent")
-    p.add_argument("--split", type=str, default="test",
-                    choices=["test", "val", "train", "all"],
-                    help="Which data split to evaluate on (default: test)")
-    p.add_argument("--split-seed", type=int, default=42,
-                    help="Random seed for split (must match training)")
+    p.add_argument(
+        "--agent",
+        type=str,
+        nargs="+",
+        required=True,
+        help="Agent checkpoint(s). Either plain paths or name=path pairs "
+        "(e.g. ppo=checkpoints/ppo_run1 dg=checkpoints/dg_run1)",
+    )
+    p.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/",
+        help="Path to data directory with human/ and bot/ subdirs",
+    )
+    p.add_argument(
+        "--episodes",
+        type=int,
+        default=500,
+        help="Number of episodes to evaluate per agent",
+    )
+    p.add_argument(
+        "--split",
+        type=str,
+        default="test",
+        choices=["test", "val", "train", "all"],
+        help="Which data split to evaluate on (default: test)",
+    )
+    p.add_argument(
+        "--split-seed",
+        type=int,
+        default=42,
+        help="Random seed for split (must match training)",
+    )
     p.add_argument("--device", type=str, default="auto")
-    p.add_argument("--eval-seeds", type=int, nargs="+", default=None,
-                    help="Run evaluation with multiple RNG seeds and report "
-                         "mean +/- std (e.g. --eval-seeds 42 123 456 789 1024)")
-    p.add_argument("--include-augmented", action="store_true",
-                    help="Include adversarially augmented bot sessions in evaluation")
-    p.add_argument("--held-out-families", type=str, nargs="*", default=None,
-                    help="Bot families to hold out from train/val (test-only)")
-    p.add_argument("--held-out-tiers", type=int, nargs="*", default=None,
-                    help="Bot tiers to hold out from train/val (test-only)")
+    p.add_argument(
+        "--eval-seeds",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Run evaluation with multiple RNG seeds and report "
+        "mean +/- std (e.g. --eval-seeds 42 123 456 789 1024)",
+    )
+    p.add_argument(
+        "--include-augmented",
+        action="store_true",
+        help="Include adversarially augmented bot sessions in evaluation",
+    )
+    p.add_argument(
+        "--held-out-families",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Bot families to hold out from train/val (test-only)",
+    )
+    p.add_argument(
+        "--held-out-tiers",
+        type=int,
+        nargs="*",
+        default=None,
+        help="Bot tiers to hold out from train/val (test-only)",
+    )
     return p.parse_args()
 
 
@@ -80,6 +122,7 @@ def _parse_agent_specs(agent_args: list[str]) -> list[tuple[str, str]]:
         else:
             # Infer name from last directory component
             from pathlib import Path
+
             name = Path(arg).name
             specs.append((name, arg))
     return specs
@@ -108,7 +151,9 @@ def main():
 
     # Load data
     print(f"Loading sessions from {args.data_dir}...")
-    sessions = load_from_directory(args.data_dir, include_augmented=args.include_augmented)
+    sessions = load_from_directory(
+        args.data_dir, include_augmented=args.include_augmented
+    )
     human_count = sum(1 for s in sessions if s.label == 1)
     bot_count = sum(1 for s in sessions if s.label == 0)
     print(f"  Loaded {len(sessions)} sessions ({human_count} human, {bot_count} bot)")
@@ -129,21 +174,31 @@ def main():
                 sessions,
                 held_out_families=args.held_out_families,
                 held_out_tiers=args.held_out_tiers,
-                train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+                train=0.70,
+                val=0.15,
+                test=0.15,
+                seed=args.split_seed,
             )
         else:
             train_s, val_s, test_s = split_sessions(
-                sessions, train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+                sessions,
+                train=0.70,
+                val=0.15,
+                test=0.15,
+                seed=args.split_seed,
             )
         splits = {"train": train_s, "val": val_s, "test": test_s}
         eval_sessions = splits[args.split]
         h = sum(1 for s in eval_sessions if s.label == 1)
         b = sum(1 for s in eval_sessions if s.label == 0)
-        print(f"  Evaluating on {args.split.upper()} split: "
-              f"{len(eval_sessions)} sessions ({h} human, {b} bot)")
+        print(
+            f"  Evaluating on {args.split.upper()} split: "
+            f"{len(eval_sessions)} sessions ({h} human, {b} bot)"
+        )
 
     # Create environment (shared across all agents — same eval data)
     from dataclasses import replace
+
     eval_cfg = replace(cfg.event_env, augment=False)
     env = EventEnv(eval_sessions, config=eval_cfg)
 
@@ -152,8 +207,10 @@ def main():
     eval_seeds = args.eval_seeds or [42]
     multi_seed = len(eval_seeds) > 1
 
-    print(f"\n  Evaluating {len(agent_specs)} agent(s): "
-          f"{', '.join(name for name, _ in agent_specs)}")
+    print(
+        f"\n  Evaluating {len(agent_specs)} agent(s): "
+        f"{', '.join(name for name, _ in agent_specs)}"
+    )
     print(f"  Episodes per agent: {args.episodes}")
     if multi_seed:
         print(f"  Eval seeds: {eval_seeds} ({len(eval_seeds)} runs per agent)")
@@ -174,9 +231,13 @@ def main():
             seed_metrics = []
             seed_episodes = []
             for seed in eval_seeds:
-                results = _run_evaluation(env, agent, args.episodes,
-                                          agent_name=f"{name}/seed={seed}",
-                                          eval_seed=seed)
+                results = _run_evaluation(
+                    env,
+                    agent,
+                    args.episodes,
+                    agent_name=f"{name}/seed={seed}",
+                    eval_seed=seed,
+                )
                 seed_episodes.append(results["episodes"])
                 seed_metrics.append(_compute_metrics(results["episodes"]))
 
@@ -188,20 +249,26 @@ def main():
             all_multi_seed_metrics[name] = seed_metrics
 
             # Pooled aggregate (all episodes as one)
-            _print_results({"episodes": combined_episodes}, agent_name=name,
-                           split_name=args.split)
-            _print_per_family_results({"episodes": combined_episodes},
-                                      agent_name=name)
+            _print_results(
+                {"episodes": combined_episodes}, agent_name=name, split_name=args.split
+            )
+            _print_per_family_results({"episodes": combined_episodes}, agent_name=name)
 
             # Mean +/- std across seeds
-            _print_results_multiseed(seed_metrics, eval_seeds,
-                                     agent_name=name, split_name=args.split,
-                                     episodes_per_seed=args.episodes)
-            _print_per_family_results_multiseed(seed_episodes, eval_seeds,
-                                                agent_name=name)
+            _print_results_multiseed(
+                seed_metrics,
+                eval_seeds,
+                agent_name=name,
+                split_name=args.split,
+                episodes_per_seed=args.episodes,
+            )
+            _print_per_family_results_multiseed(
+                seed_episodes, eval_seeds, agent_name=name
+            )
         else:
-            results = _run_evaluation(env, agent, args.episodes, agent_name=name,
-                                      eval_seed=eval_seeds[0])
+            results = _run_evaluation(
+                env, agent, args.episodes, agent_name=name, eval_seed=eval_seeds[0]
+            )
             all_results[name] = results
             _print_results(results, agent_name=name, split_name=args.split)
             _print_per_family_results(results, agent_name=name)
@@ -209,8 +276,9 @@ def main():
     # Print comparison table if multiple agents
     if len(all_results) > 1:
         if multi_seed and all_multi_seed_metrics:
-            _print_comparison_multiseed(all_multi_seed_metrics, eval_seeds,
-                                        split_name=args.split)
+            _print_comparison_multiseed(
+                all_multi_seed_metrics, eval_seeds, split_name=args.split
+            )
         else:
             _print_comparison(all_results, split_name=args.split)
 
@@ -263,7 +331,9 @@ def _run_evaluation(
         action_mask = info.get("action_mask")
         done = False
         while not done:
-            action, _, _ = agent.select_action(obs, action_mask=action_mask, deterministic=True)
+            action, _, _ = agent.select_action(
+                obs, action_mask=action_mask, deterministic=True
+            )
             obs, reward, terminated, truncated, step_info = env.step(action)
             done = terminated or truncated
 
@@ -273,15 +343,17 @@ def _run_evaluation(
             action_mask = step_info.get("action_mask")
             info = step_info
 
-        episode_data.append({
-            "true_label": true_label,
-            "bot_type": bot_type,
-            "outcome": info.get("outcome", "unknown"),
-            "reward": total_reward,
-            "steps": steps,
-            "actions": actions_taken,
-            "final_action": actions_taken[-1] if actions_taken else -1,
-        })
+        episode_data.append(
+            {
+                "true_label": true_label,
+                "bot_type": bot_type,
+                "outcome": info.get("outcome", "unknown"),
+                "reward": total_reward,
+                "steps": steps,
+                "actions": actions_taken,
+                "final_action": actions_taken[-1] if actions_taken else -1,
+            }
+        )
 
     elapsed = time.time() - t_start
     sys.stdout.write(
@@ -298,19 +370,39 @@ def _compute_metrics(episodes: list[dict]) -> dict:
     rewards = [e["reward"] for e in episodes]
     lengths = [e["steps"] for e in episodes]
 
-    tp = sum(1 for e in episodes if e["true_label"] == 0 and e["outcome"] in
-             ("correct_block", "bot_blocked_puzzle"))
-    tn = sum(1 for e in episodes if e["true_label"] == 1 and e["outcome"] in
-             ("correct_allow", "human_passed_puzzle"))
-    fp = sum(1 for e in episodes if e["true_label"] == 1 and e["outcome"] in
-             ("false_positive_block", "fp_puzzle"))
-    fn = sum(1 for e in episodes if e["true_label"] == 0 and e["outcome"] in
-             ("false_negative", "bot_passed_puzzle"))
+    tp = sum(
+        1
+        for e in episodes
+        if e["true_label"] == 0
+        and e["outcome"] in ("correct_block", "bot_blocked_puzzle")
+    )
+    tn = sum(
+        1
+        for e in episodes
+        if e["true_label"] == 1
+        and e["outcome"] in ("correct_allow", "human_passed_puzzle")
+    )
+    fp = sum(
+        1
+        for e in episodes
+        if e["true_label"] == 1
+        and e["outcome"] in ("false_positive_block", "fp_puzzle")
+    )
+    fn = sum(
+        1
+        for e in episodes
+        if e["true_label"] == 0
+        and e["outcome"] in ("false_negative", "bot_passed_puzzle")
+    )
     truncated = sum(1 for e in episodes if e["outcome"] == "truncated")
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
     accuracy = (tp + tn) / n if n > 0 else 0.0
 
     # Honeypot usage
@@ -329,7 +421,11 @@ def _compute_metrics(episodes: list[dict]) -> dict:
         "avg_reward": float(np.mean(rewards)),
         "std_reward": float(np.std(rewards)),
         "avg_length": float(np.mean(lengths)),
-        "tp": tp, "tn": tn, "fp": fp, "fn": fn, "truncated": truncated,
+        "tp": tp,
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "truncated": truncated,
         "accuracy": accuracy,
         "precision": precision,
         "recall": recall,
@@ -358,8 +454,10 @@ def _print_results(results: dict, agent_name: str = "agent", split_name: str = "
     print(f"  True Negatives  (human allowed): {m['tn']:4d} ({100*m['tn']/n:.1f}%)")
     print(f"  False Positives (human blocked): {m['fp']:4d} ({100*m['fp']/n:.1f}%)")
     print(f"  False Negatives (bot allowed):   {m['fn']:4d} ({100*m['fn']/n:.1f}%)")
-    print(f"  Truncated (indecisive):          {m['truncated']:4d} ({100*m['truncated']/n:.1f}%)")
-    other = n - m['tp'] - m['tn'] - m['fp'] - m['fn'] - m['truncated']
+    print(
+        f"  Truncated (indecisive):          {m['truncated']:4d} ({100*m['truncated']/n:.1f}%)"
+    )
+    other = n - m["tp"] - m["tn"] - m["fp"] - m["fn"] - m["truncated"]
     if other > 0:
         print(f"  Other:                           {other:4d} ({100*other/n:.1f}%)")
     print()
@@ -410,14 +508,18 @@ def _print_results(results: dict, agent_name: str = "agent", split_name: str = "
     bot_eps = [e for e in episodes if e["true_label"] == 0]
     if human_eps:
         hp_human = [sum(1 for a in e["actions"] if a == 1) for e in human_eps]
-        print(f"  Honeypot on humans: {sum(1 for c in hp_human if c > 0)}/{len(human_eps)} "
-              f"({100*sum(1 for c in hp_human if c > 0)/len(human_eps):.1f}%), "
-              f"avg {np.mean(hp_human):.2f}/ep")
+        print(
+            f"  Honeypot on humans: {sum(1 for c in hp_human if c > 0)}/{len(human_eps)} "
+            f"({100*sum(1 for c in hp_human if c > 0)/len(human_eps):.1f}%), "
+            f"avg {np.mean(hp_human):.2f}/ep"
+        )
     if bot_eps:
         hp_bot = [sum(1 for a in e["actions"] if a == 1) for e in bot_eps]
-        print(f"  Honeypot on bots:   {sum(1 for c in hp_bot if c > 0)}/{len(bot_eps)} "
-              f"({100*sum(1 for c in hp_bot if c > 0)/len(bot_eps):.1f}%), "
-              f"avg {np.mean(hp_bot):.2f}/ep")
+        print(
+            f"  Honeypot on bots:   {sum(1 for c in hp_bot if c > 0)}/{len(bot_eps)} "
+            f"({100*sum(1 for c in hp_bot if c > 0)/len(bot_eps):.1f}%), "
+            f"avg {np.mean(hp_bot):.2f}/ep"
+        )
     print()
 
     # All-step action distribution (not just final)
@@ -455,19 +557,21 @@ def _print_results_multiseed(
     n_seeds = len(seeds)
     total_eps = n_seeds * episodes_per_seed
 
-    print(f"=== {agent_name.upper()} - {split_name.upper()} split "
-          f"({total_eps} episodes, {n_seeds} seeds) ===")
+    print(
+        f"=== {agent_name.upper()} - {split_name.upper()} split "
+        f"({total_eps} episodes, {n_seeds} seeds) ==="
+    )
     print()
 
     rows = [
-        ("Accuracy",  "accuracy"),
+        ("Accuracy", "accuracy"),
         ("Precision", "precision"),
-        ("Recall",    "recall"),
-        ("F1",        "f1"),
+        ("Recall", "recall"),
+        ("F1", "f1"),
         ("Avg Reward", "avg_reward"),
         ("Avg Length", "avg_length"),
         ("Honeypot %", "honeypot_rate"),
-        ("Avg HP/ep",  "avg_honeypots_per_ep"),
+        ("Avg HP/ep", "avg_honeypots_per_ep"),
     ]
 
     for label, key in rows:
@@ -480,11 +584,11 @@ def _print_results_multiseed(
     # Confusion matrix (mean +/- std)
     print("--- Confusion Matrix (mean +/- std across seeds) ---")
     for label, key in [
-        ("True Positives  (bot blocked)",   "tp"),
+        ("True Positives  (bot blocked)", "tp"),
         ("True Negatives  (human allowed)", "tn"),
         ("False Positives (human blocked)", "fp"),
-        ("False Negatives (bot allowed)",   "fn"),
-        ("Truncated (indecisive)",          "truncated"),
+        ("False Negatives (bot allowed)", "fn"),
+        ("Truncated (indecisive)", "truncated"),
     ]:
         values = [m[key] for m in seed_metrics]
         mean = np.mean(values)
@@ -498,8 +602,10 @@ def _print_results_multiseed(
     print(f"  {'-' * 42}")
     for i, seed in enumerate(seeds):
         m = seed_metrics[i]
-        print(f"  {seed:<10d} {m['accuracy']:8.3f} {m['precision']:8.3f} "
-              f"{m['recall']:8.3f} {m['f1']:8.3f}")
+        print(
+            f"  {seed:<10d} {m['accuracy']:8.3f} {m['precision']:8.3f} "
+            f"{m['recall']:8.3f} {m['f1']:8.3f}"
+        )
     print()
 
 
@@ -532,7 +638,9 @@ def _print_per_family_results_multiseed(
         seed_family_rates.append(rates)
         seed_family_counts.append(counts)
 
-    print(f"--- Per-Family Bot Detection ({agent_name}, mean +/- std, {len(seeds)} seeds) ---")
+    print(
+        f"--- Per-Family Bot Detection ({agent_name}, mean +/- std, {len(seeds)} seeds) ---"
+    )
     print(f"  {'Family':<18s} {'Tier':>4s} {'N/seed':>7s} {'Rate':>14s}")
     print(f"  {'-' * 45}")
 
@@ -544,8 +652,10 @@ def _print_per_family_results_multiseed(
         avg_n = int(np.mean(counts))
         tier = bot_type_to_tier(family if family != "unknown" else None)
         tier_str = str(tier) if tier > 0 else "?"
-        print(f"  {family:<18s} {tier_str:>4s} {avg_n:>7d} "
-              f"{mean_rate:>7.1%} +/- {std_rate:.1%}")
+        print(
+            f"  {family:<18s} {tier_str:>4s} {avg_n:>7d} "
+            f"{mean_rate:>7.1%} +/- {std_rate:.1%}"
+        )
     print()
 
     # Per-tier aggregation
@@ -577,8 +687,10 @@ def _print_per_family_results_multiseed(
         std_rate = np.std(rates)
         avg_n = int(np.mean(counts))
         tier_name = TIER_NAMES.get(tier_num, "Unknown")
-        print(f"  Tier {tier_num} ({tier_name}): ~{avg_n} bots, "
-              f"{mean_rate:.1%} +/- {std_rate:.1%}")
+        print(
+            f"  Tier {tier_num} ({tier_name}): ~{avg_n} bots, "
+            f"{mean_rate:.1%} +/- {std_rate:.1%}"
+        )
     print()
 
 
@@ -599,7 +711,9 @@ def _print_per_family_results(results: dict, agent_name: str = "agent"):
     detected_outcomes = {"correct_block", "bot_blocked_puzzle"}
 
     print(f"--- Per-Family Bot Detection ({agent_name}) ---")
-    print(f"  {'Family':<18s} {'Tier':>4s} {'N':>5s} {'Detect':>7s} {'Miss':>5s} {'Rate':>7s}")
+    print(
+        f"  {'Family':<18s} {'Tier':>4s} {'N':>5s} {'Detect':>7s} {'Miss':>5s} {'Rate':>7s}"
+    )
     print(f"  {'-' * 48}")
 
     for family in sorted(by_family.keys()):
@@ -610,7 +724,9 @@ def _print_per_family_results(results: dict, agent_name: str = "agent"):
         rate = detected / n if n > 0 else 0.0
         tier = bot_type_to_tier(family if family != "unknown" else None)
         tier_str = str(tier) if tier > 0 else "?"
-        print(f"  {family:<18s} {tier_str:>4s} {n:5d} {detected:7d} {missed:5d} {rate:7.1%}")
+        print(
+            f"  {family:<18s} {tier_str:>4s} {n:5d} {detected:7d} {missed:5d} {rate:7.1%}"
+        )
 
     print()
 
@@ -651,19 +767,19 @@ def _print_comparison(all_results: dict[str, dict], split_name: str = "test"):
 
     # Rows
     rows = [
-        ("Accuracy",  "accuracy",  ".3f"),
-        ("Precision",  "precision", ".3f"),
-        ("Recall",     "recall",    ".3f"),
-        ("F1",         "f1",        ".3f"),
+        ("Accuracy", "accuracy", ".3f"),
+        ("Precision", "precision", ".3f"),
+        ("Recall", "recall", ".3f"),
+        ("F1", "f1", ".3f"),
         ("Avg Reward", "avg_reward", ".3f"),
         ("Avg Length", "avg_length", ".1f"),
         ("Honeypot %", "honeypot_rate", ".1%"),
-        ("Avg HP/ep",  "avg_honeypots_per_ep", ".2f"),
-        ("TP (bot blocked)", "tp",  "d"),
-        ("TN (human ok)",    "tn",  "d"),
-        ("FP (human bad)",   "fp",  "d"),
-        ("FN (bot missed)",  "fn",  "d"),
-        ("Truncated",  "truncated", "d"),
+        ("Avg HP/ep", "avg_honeypots_per_ep", ".2f"),
+        ("TP (bot blocked)", "tp", "d"),
+        ("TN (human ok)", "tn", "d"),
+        ("FP (human bad)", "fp", "d"),
+        ("FN (bot missed)", "fn", "d"),
+        ("Truncated", "truncated", "d"),
     ]
 
     for label, key, fmt in rows:
@@ -693,8 +809,10 @@ def _print_comparison_multiseed(
     """Print side-by-side comparison with mean +/- std across seeds."""
     print()
     print("=" * 80)
-    print(f"  COMPARISON TABLE — {split_name.upper()} split "
-          f"(mean +/- std, {len(seeds)} seeds: {seeds})")
+    print(
+        f"  COMPARISON TABLE — {split_name.upper()} split "
+        f"(mean +/- std, {len(seeds)} seeds: {seeds})"
+    )
     print("=" * 80)
 
     names = list(all_metrics.keys())
@@ -704,13 +822,13 @@ def _print_comparison_multiseed(
     print("  " + "-" * (16 + col_w * len(names)))
 
     rows = [
-        ("Accuracy",   "accuracy"),
-        ("Precision",  "precision"),
-        ("Recall",     "recall"),
-        ("F1",         "f1"),
+        ("Accuracy", "accuracy"),
+        ("Precision", "precision"),
+        ("Recall", "recall"),
+        ("F1", "f1"),
         ("Avg Reward", "avg_reward"),
         ("Honeypot %", "honeypot_rate"),
-        ("Avg HP/ep",  "avg_honeypots_per_ep"),
+        ("Avg HP/ep", "avg_honeypots_per_ep"),
     ]
 
     for label, key in rows:
@@ -725,7 +843,9 @@ def _print_comparison_multiseed(
     print()
 
     # Highlight best (by mean)
-    best_acc = max(names, key=lambda n: np.mean([m["accuracy"] for m in all_metrics[n]]))
+    best_acc = max(
+        names, key=lambda n: np.mean([m["accuracy"] for m in all_metrics[n]])
+    )
     best_f1 = max(names, key=lambda n: np.mean([m["f1"] for m in all_metrics[n]]))
     acc_mean = np.mean([m["accuracy"] for m in all_metrics[best_acc]])
     f1_mean = np.mean([m["f1"] for m in all_metrics[best_f1]])

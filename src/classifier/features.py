@@ -39,7 +39,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from rl_captcha.config import FeatureConfig
 from classifier.data_loader import Session
 
-
 FEATURE_NAMES = [
     # Mouse (9)
     "mouse_count",
@@ -116,11 +115,11 @@ class SessionFeatureExtractor:
         """Return a (39,) float32 feature vector for one session."""
         vec = np.zeros(FEATURE_DIM, dtype=np.float32)
 
-        vec[0:9]   = self._mouse_features(session.mouse)
-        vec[9:13]  = self._click_features(session.clicks)
+        vec[0:9] = self._mouse_features(session.mouse)
+        vec[9:13] = self._click_features(session.clicks)
         vec[13:21] = self._keystroke_features(session.keystrokes)
         vec[21:27] = self._scroll_features(session.scroll)
-        vec[27]    = self._session_duration(session)
+        vec[27] = self._session_duration(session)
         vec[28:32] = self._event_type_ratios(session)
         vec[32:35] = self._global_timing(session)
         vec[35:39] = self._spatial_features(session)
@@ -193,13 +192,13 @@ class SessionFeatureExtractor:
                 prev_dx, prev_dy = dx, dy
 
         avg_speed = float(np.mean(speeds)) if speeds else 0.0
-        std_speed = float(np.std(speeds))  if speeds else 0.0
-        avg_dt    = float(np.mean(dts))    if dts    else 0.0
-        std_dt    = float(np.std(dts))     if dts    else 0.0
+        std_speed = float(np.std(speeds)) if speeds else 0.0
+        avg_dt = float(np.mean(dts)) if dts else 0.0
+        std_dt = float(np.std(dts)) if dts else 0.0
 
         steps = max(count - 1, 1)
         dir_change_ratio = dir_changes / steps
-        jitter_ratio     = jitter_count / steps
+        jitter_ratio = jitter_count / steps
 
         # Straightness: ratio of direct distance to total path length.
         # 1.0 = perfectly straight (bot-like), <1.0 = curved (human-like).
@@ -264,7 +263,7 @@ class SessionFeatureExtractor:
                     interactive += 1
 
         avg_interval = float(np.mean(intervals)) if intervals else 0.0
-        std_interval = float(np.std(intervals))  if intervals else 0.0
+        std_interval = float(np.std(intervals)) if intervals else 0.0
         interactive_ratio = interactive / count
 
         return [float(count), avg_interval, std_interval, interactive_ratio]
@@ -311,8 +310,8 @@ class SessionFeatureExtractor:
             prev_field = field
             prev_t = t
 
-        avg_interval  = float(np.mean(intervals)) if intervals else 0.0
-        std_interval  = float(np.std(intervals))  if intervals else 0.0
+        avg_interval = float(np.mean(intervals)) if intervals else 0.0
+        std_interval = float(np.std(intervals)) if intervals else 0.0
         unique_fields = float(len(fields_seen))
         field_switch_ratio = field_switches / max(count - 1, 1)
 
@@ -345,7 +344,7 @@ class SessionFeatureExtractor:
                     hold_durations.append(hold)
 
         avg_hold = float(np.mean(hold_durations)) if hold_durations else 0.0
-        std_hold = float(np.std(hold_durations))  if hold_durations else 0.0
+        std_hold = float(np.std(hold_durations)) if hold_durations else 0.0
 
         return [
             float(count),
@@ -375,7 +374,7 @@ class SessionFeatureExtractor:
         prev_scroll_y = None
 
         for evt in events:
-            t  = float(evt.get("t", 0) or 0)
+            t = float(evt.get("t", 0) or 0)
             raw_dy = float(evt.get("dy", 0) or 0)
             dy = abs(raw_dy)
             sy = float(evt.get("scrollY", 0) or 0)
@@ -397,10 +396,10 @@ class SessionFeatureExtractor:
             prev_t = t
             prev_scroll_y = sy
 
-        avg_dy       = float(np.mean(abs_dys)) if abs_dys else 0.0
-        std_dy       = float(np.std(abs_dys))  if abs_dys else 0.0
-        total_abs    = float(np.sum(abs_dys))
-        avg_speed    = float(np.mean(speeds))  if speeds  else 0.0
+        avg_dy = float(np.mean(abs_dys)) if abs_dys else 0.0
+        std_dy = float(np.std(abs_dys)) if abs_dys else 0.0
+        total_abs = float(np.sum(abs_dys))
+        avg_speed = float(np.mean(speeds)) if speeds else 0.0
 
         # Scroll direction change ratio: fraction of consecutive scroll
         # pairs where dy sign flips. Humans scroll up and down erratically;
@@ -412,7 +411,14 @@ class SessionFeatureExtractor:
                     dir_changes += 1
         scroll_dir_change_ratio = dir_changes / max(count - 1, 1)
 
-        return [float(count), avg_dy, std_dy, total_abs, avg_speed, scroll_dir_change_ratio]
+        return [
+            float(count),
+            avg_dy,
+            std_dy,
+            total_abs,
+            avg_speed,
+            scroll_dir_change_ratio,
+        ]
 
     # ------------------------------------------------------------------
     # Session-level features

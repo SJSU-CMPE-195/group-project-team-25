@@ -32,7 +32,6 @@ import numpy as np
 from rl_captcha.scripts.plot_training import parse_log as parse_train_log, smooth
 from rl_captcha.scripts.plot_eval import parse_log as parse_eval_log
 
-
 COLORS = {
     "ppo": "#7bb3e0",
     "dg": "#f0a870",
@@ -57,9 +56,15 @@ LABELS = {
 }
 # Line styles: solid for no-aug, dashed for adv-aug
 LINESTYLES = {
-    "ppo": "-", "dg": "-", "soft_ppo": "-",
-    "ppo_noaug": "-", "dg_noaug": "-", "soft_ppo_noaug": "-",
-    "ppo_advaug": "--", "dg_advaug": "--", "soft_ppo_advaug": "--",
+    "ppo": "-",
+    "dg": "-",
+    "soft_ppo": "-",
+    "ppo_noaug": "-",
+    "dg_noaug": "-",
+    "soft_ppo_noaug": "-",
+    "ppo_advaug": "--",
+    "dg_advaug": "--",
+    "soft_ppo_advaug": "--",
 }
 
 
@@ -87,30 +92,32 @@ def plot_comparison(
     out_dir.mkdir(parents=True, exist_ok=True)
     algos = list(all_rollouts.keys())
 
-    plt.rcParams.update({
-        "font.family": "sans-serif",
-        "font.sans-serif": ["Segoe UI", "Helvetica", "Arial", "DejaVu Sans"],
-        "font.size": 11,
-        "axes.titlesize": 13,
-        "axes.titleweight": "bold",
-        "axes.labelsize": 11,
-        "axes.labelcolor": "#444444",
-        "legend.fontsize": 9,
-        "figure.dpi": 200,
-        "figure.facecolor": "white",
-        "axes.facecolor": "#fafafa",
-        "axes.edgecolor": "#dddddd",
-        "axes.grid": True,
-        "grid.alpha": 0.25,
-        "grid.color": "#e0e0e0",
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "xtick.color": "#666666",
-        "ytick.color": "#666666",
-        "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.25,
-        "savefig.facecolor": "white",
-    })
+    plt.rcParams.update(
+        {
+            "font.family": "sans-serif",
+            "font.sans-serif": ["Segoe UI", "Helvetica", "Arial", "DejaVu Sans"],
+            "font.size": 11,
+            "axes.titlesize": 13,
+            "axes.titleweight": "bold",
+            "axes.labelsize": 11,
+            "axes.labelcolor": "#444444",
+            "legend.fontsize": 9,
+            "figure.dpi": 200,
+            "figure.facecolor": "white",
+            "axes.facecolor": "#fafafa",
+            "axes.edgecolor": "#dddddd",
+            "axes.grid": True,
+            "grid.alpha": 0.25,
+            "grid.color": "#e0e0e0",
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "xtick.color": "#666666",
+            "ytick.color": "#666666",
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.25,
+            "savefig.facecolor": "white",
+        }
+    )
 
     # Precompute steps arrays
     steps_k = {}
@@ -124,9 +131,21 @@ def plot_comparison(
         color = COLORS.get(algo, "#999999")
         label = LABELS.get(algo, algo)
         ls = LINESTYLES.get(algo, "-")
-        ax.plot(steps_k[algo], smooth(rewards, 10), color=color, linewidth=2, label=label, linestyle=ls)
-        ax.fill_between(steps_k[algo], smooth(rewards, 20) - 0.05,
-                        smooth(rewards, 20) + 0.05, color=color, alpha=0.1)
+        ax.plot(
+            steps_k[algo],
+            smooth(rewards, 10),
+            color=color,
+            linewidth=2,
+            label=label,
+            linestyle=ls,
+        )
+        ax.fill_between(
+            steps_k[algo],
+            smooth(rewards, 20) - 0.05,
+            smooth(rewards, 20) + 0.05,
+            color=color,
+            alpha=0.1,
+        )
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.5)
     ax.set_xlabel("Training Steps (x1K)")
     ax.set_ylabel("Average Episode Reward")
@@ -149,8 +168,16 @@ def plot_comparison(
             color = COLORS.get(algo, "#999999")
             label = LABELS.get(algo, algo)
             ls = LINESTYLES.get(algo, "-")
-            ax.plot(vs, va, "o-", color=color, linewidth=1.8, markersize=3,
-                    label=label, linestyle=ls)
+            ax.plot(
+                vs,
+                va,
+                "o-",
+                color=color,
+                linewidth=1.8,
+                markersize=3,
+                label=label,
+                linestyle=ls,
+            )
 
     ax.set_xlabel("Training Steps (x1K)")
     ax.set_ylabel("Validation Accuracy (%)")
@@ -170,7 +197,14 @@ def plot_comparison(
         color = COLORS.get(algo, "#999999")
         label = LABELS.get(algo, algo)
         ls = LINESTYLES.get(algo, "-")
-        ax.plot(steps_k[algo], smooth(ent, 10), color=color, linewidth=2, label=label, linestyle=ls)
+        ax.plot(
+            steps_k[algo],
+            smooth(ent, 10),
+            color=color,
+            linewidth=2,
+            label=label,
+            linestyle=ls,
+        )
     ax.set_xlabel("Training Steps (x1K)")
     ax.set_ylabel("Policy Entropy")
     ax.set_title("Decision Confidence (Entropy)")
@@ -185,8 +219,11 @@ def plot_comparison(
         arr = []
         for r in rollouts:
             oc = r.get("outcomes", {})
-            arr.append(oc.get("correct_allow", 0) + oc.get("correct_block", 0)
-                       + oc.get("bot_blocked_puzzle", 0))
+            arr.append(
+                oc.get("correct_allow", 0)
+                + oc.get("correct_block", 0)
+                + oc.get("bot_blocked_puzzle", 0)
+            )
         return np.array(arr)
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
@@ -195,7 +232,14 @@ def plot_comparison(
         color = COLORS.get(algo, "#999999")
         label = LABELS.get(algo, algo)
         ls = LINESTYLES.get(algo, "-")
-        ax.plot(steps_k[algo], smooth(acc, 10), color=color, linewidth=2, label=label, linestyle=ls)
+        ax.plot(
+            steps_k[algo],
+            smooth(acc, 10),
+            color=color,
+            linewidth=2,
+            label=label,
+            linestyle=ls,
+        )
     ax.set_xlabel("Training Steps (x1K)")
     ax.set_ylabel("Correct Decisions (%)")
     ax.set_title("Training Correct Decision Rate")
@@ -222,12 +266,25 @@ def plot_comparison(
                 color = COLORS.get(algo, "#999999")
                 label = LABELS.get(algo, algo)
                 offset = (i - (n_algos - 1) / 2) * width
-                bars = ax.bar(x + offset, vals, width, label=label, color=color,
-                              edgecolor="white", linewidth=1.5)
+                bars = ax.bar(
+                    x + offset,
+                    vals,
+                    width,
+                    label=label,
+                    color=color,
+                    edgecolor="white",
+                    linewidth=1.5,
+                )
                 for bar in bars:
-                    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                            f"{bar.get_height():.3f}", ha="center", va="bottom",
-                            fontsize=9, fontweight="bold")
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bar.get_height() + 0.01,
+                        f"{bar.get_height():.3f}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=9,
+                        fontweight="bold",
+                    )
 
             ax.set_xticks(x)
             ax.set_xticklabels(metric_names)
@@ -242,15 +299,19 @@ def plot_comparison(
 
             # ── 6. Confusion matrices (2-row grid, pastel blue) ─────────
             from matplotlib.colors import LinearSegmentedColormap
+
             teal_cmap = LinearSegmentedColormap.from_list(
-                "pastel_blue", ["#f0f4f8", "#c6ddf0", "#8ab8d8", "#5a9bc5"], N=256)
+                "pastel_blue", ["#f0f4f8", "#c6ddf0", "#8ab8d8", "#5a9bc5"], N=256
+            )
 
             n_eval = len(eval_algos)
             if n_eval > 3:
                 n_rows, n_cols = 2, (n_eval + 1) // 2
             else:
                 n_rows, n_cols = 1, n_eval
-            fig, axes = plt.subplots(n_rows, n_cols, figsize=(4.5 * n_cols, 4.5 * n_rows))
+            fig, axes = plt.subplots(
+                n_rows, n_cols, figsize=(4.5 * n_cols, 4.5 * n_rows)
+            )
             axes_flat = np.array(axes).flatten()
 
             for idx, algo in enumerate(eval_algos):
@@ -274,12 +335,25 @@ def plot_comparison(
                     for j in range(2):
                         val = cm[i, j]
                         color = "#222222" if val < cm.max() * 0.6 else "white"
-                        ax.text(j, i, f"{val}", ha="center", va="center",
-                                fontsize=16, fontweight="bold", color=color)
+                        ax.text(
+                            j,
+                            i,
+                            f"{val}",
+                            ha="center",
+                            va="center",
+                            fontsize=16,
+                            fontweight="bold",
+                            color=color,
+                        )
                 acc = result.get("accuracy", 0)
                 label = LABELS.get(algo, algo)
-                ax.set_title(f"{label}\nAcc={acc:.3f}", fontsize=11,
-                             fontweight="bold", color="#444444", pad=10)
+                ax.set_title(
+                    f"{label}\nAcc={acc:.3f}",
+                    fontsize=11,
+                    fontweight="bold",
+                    color="#444444",
+                    pad=10,
+                )
 
             for idx in range(n_eval, len(axes_flat)):
                 axes_flat[idx].axis("off")
@@ -293,16 +367,26 @@ def plot_comparison(
     # ── 7. Combined summary (2×2 training-only) ─────────────────────
     fig, axes = plt.subplots(2, 2, figsize=(16, 11))
     fig.subplots_adjust(hspace=0.35, wspace=0.3)
-    fig.suptitle("Algorithm Training Comparison",
-                 fontsize=16, fontweight="bold", color="#333333", y=0.98)
+    fig.suptitle(
+        "Algorithm Training Comparison",
+        fontsize=16,
+        fontweight="bold",
+        color="#333333",
+        y=0.98,
+    )
 
     # (a) Reward
     ax = axes[0, 0]
     for algo in algos:
         rewards = np.array([r.get("avg_reward", 0) for r in all_rollouts[algo]])
-        ax.plot(steps_k[algo], smooth(rewards, 10), color=COLORS.get(algo),
-                linewidth=2, label=LABELS.get(algo, algo),
-                linestyle=LINESTYLES.get(algo, "-"))
+        ax.plot(
+            steps_k[algo],
+            smooth(rewards, 10),
+            color=COLORS.get(algo),
+            linewidth=2,
+            label=LABELS.get(algo, algo),
+            linestyle=LINESTYLES.get(algo, "-"),
+        )
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.5)
     ax.set_xlabel("Steps (x1K)")
     ax.set_ylabel("Avg Reward")
@@ -319,9 +403,16 @@ def plot_comparison(
                 vs.append(r["steps"] / 1000)
                 va.append(r["val_accuracy"] * 100)
         if vs:
-            ax.plot(vs, va, "o-", color=COLORS.get(algo),
-                    linewidth=1.8, markersize=3, label=LABELS.get(algo, algo),
-                    linestyle=LINESTYLES.get(algo, "-"))
+            ax.plot(
+                vs,
+                va,
+                "o-",
+                color=COLORS.get(algo),
+                linewidth=1.8,
+                markersize=3,
+                label=LABELS.get(algo, algo),
+                linestyle=LINESTYLES.get(algo, "-"),
+            )
     ax.set_xlabel("Steps (x1K)")
     ax.set_ylabel("Validation Accuracy (%)")
     ax.set_title("(b) Validation Accuracy")
@@ -334,9 +425,14 @@ def plot_comparison(
     ax = axes[1, 0]
     for algo in algos:
         ent = np.array([r.get("entropy", 0) for r in all_rollouts[algo]])
-        ax.plot(steps_k[algo], smooth(ent, 10), color=COLORS.get(algo),
-                linewidth=2, label=LABELS.get(algo, algo),
-                linestyle=LINESTYLES.get(algo, "-"))
+        ax.plot(
+            steps_k[algo],
+            smooth(ent, 10),
+            color=COLORS.get(algo),
+            linewidth=2,
+            label=LABELS.get(algo, algo),
+            linestyle=LINESTYLES.get(algo, "-"),
+        )
     ax.set_xlabel("Steps (x1K)")
     ax.set_ylabel("Entropy")
     ax.set_title("(c) Policy Entropy")
@@ -347,9 +443,14 @@ def plot_comparison(
     ax = axes[1, 1]
     for algo in algos:
         acc = _correct_pcts(all_rollouts[algo])
-        ax.plot(steps_k[algo], smooth(acc, 10), color=COLORS.get(algo),
-                linewidth=2, label=LABELS.get(algo, algo),
-                linestyle=LINESTYLES.get(algo, "-"))
+        ax.plot(
+            steps_k[algo],
+            smooth(acc, 10),
+            color=COLORS.get(algo),
+            linewidth=2,
+            label=LABELS.get(algo, algo),
+            linestyle=LINESTYLES.get(algo, "-"),
+        )
     ax.set_xlabel("Steps (x1K)")
     ax.set_ylabel("Correct Decisions (%)")
     ax.set_title("(d) Training Correct Decision Rate")
@@ -367,13 +468,29 @@ def plot_comparison(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Algorithm comparison figures (with/without adversarial augmentation)")
-    parser.add_argument("--logs", type=str, nargs="+", required=True,
-                        help="Training logs as name=path pairs (e.g. ppo=logs/ppo_training.log)")
-    parser.add_argument("--evals", type=str, nargs="+", default=None,
-                        help="Eval logs as name=path pairs (optional)")
-    parser.add_argument("--out", type=str, default="figures/comparison", help="Output directory")
-    parser.add_argument("--format", type=str, default="png", choices=["png", "pdf", "svg"])
+    parser = argparse.ArgumentParser(
+        description="Algorithm comparison figures (with/without adversarial augmentation)"
+    )
+    parser.add_argument(
+        "--logs",
+        type=str,
+        nargs="+",
+        required=True,
+        help="Training logs as name=path pairs (e.g. ppo=logs/ppo_training.log)",
+    )
+    parser.add_argument(
+        "--evals",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Eval logs as name=path pairs (optional)",
+    )
+    parser.add_argument(
+        "--out", type=str, default="figures/comparison", help="Output directory"
+    )
+    parser.add_argument(
+        "--format", type=str, default="png", choices=["png", "pdf", "svg"]
+    )
     args = parser.parse_args()
 
     log_map = _parse_kv_args(args.logs)

@@ -116,31 +116,58 @@ def plot_all(updates: list[dict], out_dir: Path, fmt: str = "png"):
 
     nums = np.array([u["update_num"] for u in updates])
 
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.size": 11,
-        "axes.titlesize": 13,
-        "axes.labelsize": 12,
-        "legend.fontsize": 10,
-        "figure.dpi": 300,
-        "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.15,
-    })
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.size": 11,
+            "axes.titlesize": 13,
+            "axes.labelsize": 12,
+            "legend.fontsize": 10,
+            "figure.dpi": 300,
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.15,
+        }
+    )
 
     # ── 1. Cumulative accuracy (rolling window) ─────────────────────────
     after_correct = np.array([1.0 if u.get("after_correct") else 0.0 for u in updates])
-    before_correct = np.array([1.0 if u.get("before_correct") else 0.0 for u in updates])
+    before_correct = np.array(
+        [1.0 if u.get("before_correct") else 0.0 for u in updates]
+    )
 
-    cumulative_after = np.cumsum(after_correct) / np.arange(1, len(after_correct) + 1) * 100
-    cumulative_before = np.cumsum(before_correct) / np.arange(1, len(before_correct) + 1) * 100
+    cumulative_after = (
+        np.cumsum(after_correct) / np.arange(1, len(after_correct) + 1) * 100
+    )
+    cumulative_before = (
+        np.cumsum(before_correct) / np.arange(1, len(before_correct) + 1) * 100
+    )
 
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.plot(nums, cumulative_before, color="#e74c3c", linewidth=1.8, label="Before Update (cumulative)")
-    ax.plot(nums, cumulative_after, color="#2ecc71", linewidth=1.8, label="After Update (cumulative)")
+    ax.plot(
+        nums,
+        cumulative_before,
+        color="#e74c3c",
+        linewidth=1.8,
+        label="Before Update (cumulative)",
+    )
+    ax.plot(
+        nums,
+        cumulative_after,
+        color="#2ecc71",
+        linewidth=1.8,
+        label="After Update (cumulative)",
+    )
     if len(nums) >= 5:
         window = min(10, len(nums))
-        ax.plot(nums, smooth(after_correct * 100, window), color="#27ae60",
-                linewidth=1.2, linestyle="--", alpha=0.6, label=f"After (rolling w={window})")
+        ax.plot(
+            nums,
+            smooth(after_correct * 100, window),
+            color="#27ae60",
+            linewidth=1.2,
+            linestyle="--",
+            alpha=0.6,
+            label=f"After (rolling w={window})",
+        )
     ax.set_xlabel("Online Update #")
     ax.set_ylabel("Accuracy (%)")
     ax.set_title("Online Learning — Cumulative Accuracy")
@@ -167,13 +194,32 @@ def plot_all(updates: list[dict], out_dir: Path, fmt: str = "png"):
     # humans: p_allow should go UP after update
     if human_mask.any():
         h_nums = nums[human_mask]
-        ax1.scatter(h_nums, before_p_allow[human_mask], color="#e74c3c", alpha=0.5, s=25, label="Before", zorder=3)
-        ax1.scatter(h_nums, after_p_allow[human_mask], color="#2ecc71", alpha=0.5, s=25, label="After", zorder=3)
+        ax1.scatter(
+            h_nums,
+            before_p_allow[human_mask],
+            color="#e74c3c",
+            alpha=0.5,
+            s=25,
+            label="Before",
+            zorder=3,
+        )
+        ax1.scatter(
+            h_nums,
+            after_p_allow[human_mask],
+            color="#2ecc71",
+            alpha=0.5,
+            s=25,
+            label="After",
+            zorder=3,
+        )
         for i in range(len(h_nums)):
             idx = np.where(human_mask)[0][i]
-            ax1.annotate("", xy=(h_nums[i], after_p_allow[idx]),
-                         xytext=(h_nums[i], before_p_allow[idx]),
-                         arrowprops=dict(arrowstyle="->", color="#aaa", lw=0.8))
+            ax1.annotate(
+                "",
+                xy=(h_nums[i], after_p_allow[idx]),
+                xytext=(h_nums[i], before_p_allow[idx]),
+                arrowprops=dict(arrowstyle="->", color="#aaa", lw=0.8),
+            )
     ax1.axhline(0.5, color="gray", linestyle="--", linewidth=0.5)
     ax1.set_xlabel("Online Update #")
     ax1.set_ylabel("P(allow)")
@@ -185,13 +231,32 @@ def plot_all(updates: list[dict], out_dir: Path, fmt: str = "png"):
     # bots: p_suspicious should go UP after update
     if bot_mask.any():
         b_nums = nums[bot_mask]
-        ax2.scatter(b_nums, before_p_sus[bot_mask], color="#e74c3c", alpha=0.5, s=25, label="Before", zorder=3)
-        ax2.scatter(b_nums, after_p_sus[bot_mask], color="#2ecc71", alpha=0.5, s=25, label="After", zorder=3)
+        ax2.scatter(
+            b_nums,
+            before_p_sus[bot_mask],
+            color="#e74c3c",
+            alpha=0.5,
+            s=25,
+            label="Before",
+            zorder=3,
+        )
+        ax2.scatter(
+            b_nums,
+            after_p_sus[bot_mask],
+            color="#2ecc71",
+            alpha=0.5,
+            s=25,
+            label="After",
+            zorder=3,
+        )
         for i in range(len(b_nums)):
             idx = np.where(bot_mask)[0][i]
-            ax2.annotate("", xy=(b_nums[i], after_p_sus[idx]),
-                         xytext=(b_nums[i], before_p_sus[idx]),
-                         arrowprops=dict(arrowstyle="->", color="#aaa", lw=0.8))
+            ax2.annotate(
+                "",
+                xy=(b_nums[i], after_p_sus[idx]),
+                xytext=(b_nums[i], before_p_sus[idx]),
+                arrowprops=dict(arrowstyle="->", color="#aaa", lw=0.8),
+            )
     ax2.axhline(0.5, color="gray", linestyle="--", linewidth=0.5)
     ax2.set_xlabel("Online Update #")
     ax2.set_ylabel("P(suspicious)")
@@ -200,22 +265,42 @@ def plot_all(updates: list[dict], out_dir: Path, fmt: str = "png"):
     ax2.grid(True, alpha=0.3)
     ax2.set_ylim(0, 1)
 
-    fig.suptitle("Probability Shift Per Update (Before → After)", fontsize=14, fontweight="bold", y=1.02)
+    fig.suptitle(
+        "Probability Shift Per Update (Before → After)",
+        fontsize=14,
+        fontweight="bold",
+        y=1.02,
+    )
     fig.tight_layout()
     fig.savefig(out_dir / f"online_prob_shift.{fmt}")
     plt.close(fig)
     print(f"  Saved online_prob_shift.{fmt}")
 
     # ── 3. Improvement / Regression / Unchanged bar over time ────────────
-    improved = np.array([1 if u.get("result") == "IMPROVED" else 0 for u in updates], dtype=float)
-    regressed = np.array([1 if u.get("result") == "REGRESSED" else 0 for u in updates], dtype=float)
-    unchanged = np.array([1 if u.get("result") == "UNCHANGED" else 0 for u in updates], dtype=float)
+    improved = np.array(
+        [1 if u.get("result") == "IMPROVED" else 0 for u in updates], dtype=float
+    )
+    regressed = np.array(
+        [1 if u.get("result") == "REGRESSED" else 0 for u in updates], dtype=float
+    )
+    unchanged = np.array(
+        [1 if u.get("result") == "UNCHANGED" else 0 for u in updates], dtype=float
+    )
 
     fig, ax = plt.subplots(figsize=(7, 4))
     bar_width = 0.8
     ax.bar(nums, improved, bar_width, color="#2ecc71", label="Improved")
-    ax.bar(nums, unchanged, bar_width, bottom=improved, color="#95a5a6", label="Unchanged")
-    ax.bar(nums, regressed, bar_width, bottom=improved + unchanged, color="#e74c3c", label="Regressed")
+    ax.bar(
+        nums, unchanged, bar_width, bottom=improved, color="#95a5a6", label="Unchanged"
+    )
+    ax.bar(
+        nums,
+        regressed,
+        bar_width,
+        bottom=improved + unchanged,
+        color="#e74c3c",
+        label="Regressed",
+    )
     ax.set_xlabel("Online Update #")
     ax.set_ylabel("Outcome")
     ax.set_title("Per-Update Outcome")
@@ -235,7 +320,13 @@ def plot_all(updates: list[dict], out_dir: Path, fmt: str = "png"):
     color2 = "#2ecc71"
     ax1.plot(nums, policy_loss, color=color1, linewidth=1.5, alpha=0.4)
     if len(nums) >= 5:
-        ax1.plot(nums, smooth(policy_loss, min(10, len(nums))), color=color1, linewidth=2, label="Policy Loss")
+        ax1.plot(
+            nums,
+            smooth(policy_loss, min(10, len(nums))),
+            color=color1,
+            linewidth=2,
+            label="Policy Loss",
+        )
     else:
         ax1.plot(nums, policy_loss, color=color1, linewidth=2, label="Policy Loss")
     ax1.set_xlabel("Online Update #")
@@ -245,7 +336,13 @@ def plot_all(updates: list[dict], out_dir: Path, fmt: str = "png"):
     ax2 = ax1.twinx()
     ax2.plot(nums, value_loss, color=color2, linewidth=1.5, alpha=0.4)
     if len(nums) >= 5:
-        ax2.plot(nums, smooth(value_loss, min(10, len(nums))), color=color2, linewidth=2, label="Value Loss")
+        ax2.plot(
+            nums,
+            smooth(value_loss, min(10, len(nums))),
+            color=color2,
+            linewidth=2,
+            label="Value Loss",
+        )
     else:
         ax2.plot(nums, value_loss, color=color2, linewidth=2, label="Value Loss")
     ax2.set_ylabel("Value Loss", color=color2)
@@ -282,13 +379,20 @@ def plot_all(updates: list[dict], out_dir: Path, fmt: str = "png"):
     imp_count = int(improved.sum())
     unch_count = int(unchanged.sum())
     reg_count = int(regressed.sum())
-    bars = ax.barh(["Improved", "Unchanged", "Regressed"],
-                   [imp_count, unch_count, reg_count],
-                   color=["#2ecc71", "#95a5a6", "#e74c3c"])
+    bars = ax.barh(
+        ["Improved", "Unchanged", "Regressed"],
+        [imp_count, unch_count, reg_count],
+        color=["#2ecc71", "#95a5a6", "#e74c3c"],
+    )
     for bar, count in zip(bars, [imp_count, unch_count, reg_count]):
         if count > 0:
-            ax.text(bar.get_width() + 0.3, bar.get_y() + bar.get_height() / 2,
-                    f"{count} ({count/total*100:.0f}%)", va="center", fontsize=10)
+            ax.text(
+                bar.get_width() + 0.3,
+                bar.get_y() + bar.get_height() / 2,
+                f"{count} ({count/total*100:.0f}%)",
+                va="center",
+                fontsize=10,
+            )
     ax.set_xlabel("Count")
     ax.set_title(f"(b) Update Outcomes (n={total})")
     ax.grid(True, axis="x", alpha=0.3)
@@ -310,9 +414,18 @@ def plot_all(updates: list[dict], out_dir: Path, fmt: str = "png"):
     h_mask = labels_arr == "human"
     b_mask = labels_arr == "bot"
     if h_mask.any():
-        ax.scatter(nums[h_mask], events[h_mask], color="#3498db", alpha=0.6, s=30, label="Human")
+        ax.scatter(
+            nums[h_mask],
+            events[h_mask],
+            color="#3498db",
+            alpha=0.6,
+            s=30,
+            label="Human",
+        )
     if b_mask.any():
-        ax.scatter(nums[b_mask], events[b_mask], color="#e74c3c", alpha=0.6, s=30, label="Bot")
+        ax.scatter(
+            nums[b_mask], events[b_mask], color="#e74c3c", alpha=0.6, s=30, label="Bot"
+        )
     ax.set_xlabel("Update #")
     ax.set_ylabel("Events in Session")
     ax.set_title("(d) Session Sizes")
@@ -325,17 +438,33 @@ def plot_all(updates: list[dict], out_dir: Path, fmt: str = "png"):
     print(f"  Saved online_summary.{fmt}")
 
     # ── Print stats ──────────────────────────────────────────────────────
-    print(f"\n  Updates: {total} | Improved: {imp_count} | Unchanged: {unch_count} | Regressed: {reg_count}")
+    print(
+        f"\n  Updates: {total} | Improved: {imp_count} | Unchanged: {unch_count} | Regressed: {reg_count}"
+    )
     if total > 0:
-        print(f"  Before accuracy: {before_correct.mean()*100:.1f}% | After accuracy: {after_correct.mean()*100:.1f}%")
+        print(
+            f"  Before accuracy: {before_correct.mean()*100:.1f}% | After accuracy: {after_correct.mean()*100:.1f}%"
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize online training logs")
-    parser.add_argument("--log", type=str, default="online_training.log", help="Path to online_training.log")
-    parser.add_argument("--out", type=str, default="figures", help="Output directory for figures")
-    parser.add_argument("--format", type=str, default="png", choices=["png", "pdf", "svg"],
-                        help="Figure format (pdf recommended for papers)")
+    parser.add_argument(
+        "--log",
+        type=str,
+        default="online_training.log",
+        help="Path to online_training.log",
+    )
+    parser.add_argument(
+        "--out", type=str, default="figures", help="Output directory for figures"
+    )
+    parser.add_argument(
+        "--format",
+        type=str,
+        default="png",
+        choices=["png", "pdf", "svg"],
+        help="Figure format (pdf recommended for papers)",
+    )
     args = parser.parse_args()
 
     log_path = Path(args.log)

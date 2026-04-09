@@ -48,7 +48,11 @@ from pathlib import Path
 import numpy as np
 
 from rl_captcha.config import Config
-from rl_captcha.data.loader import load_from_directory, split_sessions, split_sessions_by_family
+from rl_captcha.data.loader import (
+    load_from_directory,
+    split_sessions,
+    split_sessions_by_family,
+)
 from rl_captcha.environment.event_env import EventEnv
 from rl_captcha.agent.ppo_lstm import PPOLSTM
 from rl_captcha.agent.dg_lstm import DGLSTM, DGConfig
@@ -57,47 +61,109 @@ from rl_captcha.agent.soft_ppo_lstm import SoftPPOLSTM, SoftPPOConfig
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Train PPO+LSTM agent")
-    p.add_argument("--data-dir", type=str, default="data/",
-                    help="Path to data directory with human/ and bot/ subdirs")
-    p.add_argument("--save-path", type=str,
-                    default="rl_captcha/agent/checkpoints/ppo_noaug",
-                    help="Directory to save checkpoints")
-    p.add_argument("--total-timesteps", type=int, default=None,
-                    help="Override total timesteps (default from PPOConfig)")
-    p.add_argument("--log-interval", type=int, default=1,
-                    help="Print stats every N rollouts")
-    p.add_argument("--save-interval", type=int, default=10,
-                    help="Save checkpoint every N rollouts")
-    p.add_argument("--val-episodes", type=int, default=100,
-                    help="Number of validation episodes per checkpoint")
+    p.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/",
+        help="Path to data directory with human/ and bot/ subdirs",
+    )
+    p.add_argument(
+        "--save-path",
+        type=str,
+        default="rl_captcha/agent/checkpoints/ppo_noaug",
+        help="Directory to save checkpoints",
+    )
+    p.add_argument(
+        "--total-timesteps",
+        type=int,
+        default=None,
+        help="Override total timesteps (default from PPOConfig)",
+    )
+    p.add_argument(
+        "--log-interval", type=int, default=1, help="Print stats every N rollouts"
+    )
+    p.add_argument(
+        "--save-interval", type=int, default=10, help="Save checkpoint every N rollouts"
+    )
+    p.add_argument(
+        "--val-episodes",
+        type=int,
+        default=100,
+        help="Number of validation episodes per checkpoint",
+    )
     p.add_argument("--device", type=str, default="auto")
-    p.add_argument("--split-seed", type=int, default=42,
-                    help="Random seed for train/val/test split")
-    p.add_argument("--lr", type=float, default=None,
-                    help="Override learning rate (default from PPOConfig)")
-    p.add_argument("--fp-penalty", type=float, default=None,
-                    help="Override false-positive penalty (default: -1.0)")
-    p.add_argument("--algorithm", type=str, default="ppo",
-                    choices=["ppo", "dg", "soft_ppo"],
-                    help="Training algorithm: ppo, dg, or soft_ppo (default: ppo)")
-    p.add_argument("--dg-temperature", type=float, default=1.0,
-                    help="DG sigmoid temperature η (default: 1.0)")
-    p.add_argument("--dg-blend", type=float, default=0.0,
-                    help="DG-PPO blend weight: 0=pure DG, 1=pure PPO (default: 0.0)")
+    p.add_argument(
+        "--split-seed",
+        type=int,
+        default=42,
+        help="Random seed for train/val/test split",
+    )
+    p.add_argument(
+        "--lr",
+        type=float,
+        default=None,
+        help="Override learning rate (default from PPOConfig)",
+    )
+    p.add_argument(
+        "--fp-penalty",
+        type=float,
+        default=None,
+        help="Override false-positive penalty (default: -1.0)",
+    )
+    p.add_argument(
+        "--algorithm",
+        type=str,
+        default="ppo",
+        choices=["ppo", "dg", "soft_ppo"],
+        help="Training algorithm: ppo, dg, or soft_ppo (default: ppo)",
+    )
+    p.add_argument(
+        "--dg-temperature",
+        type=float,
+        default=1.0,
+        help="DG sigmoid temperature η (default: 1.0)",
+    )
+    p.add_argument(
+        "--dg-blend",
+        type=float,
+        default=0.0,
+        help="DG-PPO blend weight: 0=pure DG, 1=pure PPO (default: 0.0)",
+    )
     # Soft PPO arguments
-    p.add_argument("--target-entropy-ratio", type=float, default=0.5,
-                    help="Soft PPO target entropy as fraction of max entropy (default: 0.5)")
-    p.add_argument("--alpha-lr", type=float, default=3e-4,
-                    help="Soft PPO entropy temperature learning rate (default: 3e-4)")
+    p.add_argument(
+        "--target-entropy-ratio",
+        type=float,
+        default=0.5,
+        help="Soft PPO target entropy as fraction of max entropy (default: 0.5)",
+    )
+    p.add_argument(
+        "--alpha-lr",
+        type=float,
+        default=3e-4,
+        help="Soft PPO entropy temperature learning rate (default: 3e-4)",
+    )
     # Adversarial augmentation (pre-generated humanized bot sessions)
-    p.add_argument("--adversarial-augment", action="store_true",
-                    help="Include pre-generated adversarially augmented bot sessions "
-                         "from data/bot_augmented/ (run generate_augmented_data.py first)")
+    p.add_argument(
+        "--adversarial-augment",
+        action="store_true",
+        help="Include pre-generated adversarially augmented bot sessions "
+        "from data/bot_augmented/ (run generate_augmented_data.py first)",
+    )
     # Held-out family evaluation
-    p.add_argument("--held-out-families", type=str, nargs="*", default=None,
-                    help="Bot families to hold out from training (e.g. stealth replay)")
-    p.add_argument("--held-out-tiers", type=int, nargs="*", default=None,
-                    help="Bot tiers to hold out from training (e.g. 3 4 5)")
+    p.add_argument(
+        "--held-out-families",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Bot families to hold out from training (e.g. stealth replay)",
+    )
+    p.add_argument(
+        "--held-out-tiers",
+        type=int,
+        nargs="*",
+        default=None,
+        help="Bot tiers to hold out from training (e.g. 3 4 5)",
+    )
     return p.parse_args()
 
 
@@ -121,12 +187,16 @@ def main():
 
     # Load data (include augmented bot sessions when --adversarial-augment is on)
     print(f"Loading sessions from {args.data_dir}...")
-    sessions = load_from_directory(args.data_dir, include_augmented=args.adversarial_augment)
+    sessions = load_from_directory(
+        args.data_dir, include_augmented=args.adversarial_augment
+    )
     human_count, bot_count = _label_counts(sessions)
     print(f"  Loaded {len(sessions)} sessions ({human_count} human, {bot_count} bot)")
 
     if not sessions:
-        print("ERROR: No sessions found. Place JSON files in data/human/ and data/bot/.")
+        print(
+            "ERROR: No sessions found. Place JSON files in data/human/ and data/bot/."
+        )
         return
 
     # Stratified 70/15/15 split (with optional held-out families/tiers)
@@ -137,11 +207,18 @@ def main():
             sessions,
             held_out_families=args.held_out_families,
             held_out_tiers=args.held_out_tiers,
-            train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+            train=0.70,
+            val=0.15,
+            test=0.15,
+            seed=args.split_seed,
         )
     else:
         train_sessions, val_sessions, test_sessions = split_sessions(
-            sessions, train=0.70, val=0.15, test=0.15, seed=args.split_seed,
+            sessions,
+            train=0.70,
+            val=0.15,
+            test=0.15,
+            seed=args.split_seed,
         )
     h_tr, b_tr = _label_counts(train_sessions)
     h_va, b_va = _label_counts(val_sessions)
@@ -154,6 +231,7 @@ def main():
     train_env = EventEnv(train_sessions, config=cfg.event_env)
     if val_sessions:
         from dataclasses import replace
+
         val_cfg = replace(cfg.event_env, augment=False)
         val_env = EventEnv(val_sessions, config=val_cfg)
     else:
@@ -184,7 +262,9 @@ def main():
             config=soft_cfg,
             device=args.device,
         )
-        print(f"  Algorithm: Soft PPO (target_entropy_ratio={args.target_entropy_ratio}, alpha_lr={args.alpha_lr})")
+        print(
+            f"  Algorithm: Soft PPO (target_entropy_ratio={args.target_entropy_ratio}, alpha_lr={args.alpha_lr})"
+        )
     else:
         agent = PPOLSTM(
             obs_dim=cfg.event_env.event_dim,
@@ -197,7 +277,9 @@ def main():
     print(f"  Rollout steps: {cfg.ppo.rollout_steps}")
     print(f"  Total timesteps: {cfg.ppo.total_timesteps}")
     if args.adversarial_augment:
-        print(f"  Adversarial augmentation: ON (augmented bot sessions loaded from data/bot_augmented/)")
+        print(
+            f"  Adversarial augmentation: ON (augmented bot sessions loaded from data/bot_augmented/)"
+        )
     else:
         print(f"  Adversarial augmentation: OFF")
     print()
@@ -231,8 +313,12 @@ def main():
         # Logging
         if rollout_num % args.log_interval == 0:
             _print_rollout_stats(
-                rollout_num, num_rollouts, total_steps,
-                rollout_stats, update_metrics, t_elapsed,
+                rollout_num,
+                num_rollouts,
+                total_steps,
+                rollout_stats,
+                update_metrics,
+                t_elapsed,
             )
 
         # Save checkpoint + validation
@@ -242,7 +328,9 @@ def main():
 
             if val_env and args.val_episodes > 0:
                 val_acc = _quick_validate(val_env, agent, args.val_episodes)
-                print(f"  [Val accuracy: {val_acc:.3f} over {args.val_episodes} episodes]")
+                print(
+                    f"  [Val accuracy: {val_acc:.3f} over {args.val_episodes} episodes]"
+                )
             print()
 
     # Final save
@@ -273,13 +361,20 @@ def _quick_validate(env: EventEnv, agent: PPOLSTM, num_episodes: int) -> float:
         done = False
 
         while not done:
-            action, _, _ = agent.select_action(obs, action_mask=action_mask, deterministic=True)
+            action, _, _ = agent.select_action(
+                obs, action_mask=action_mask, deterministic=True
+            )
             obs, reward, terminated, truncated, step_info = env.step(action)
             done = terminated or truncated
             action_mask = step_info.get("action_mask")
 
         outcome = step_info.get("outcome", "")
-        if outcome in ("correct_block", "bot_blocked_puzzle", "correct_allow", "human_passed_puzzle"):
+        if outcome in (
+            "correct_block",
+            "bot_blocked_puzzle",
+            "correct_allow",
+            "human_passed_puzzle",
+        ):
             correct += 1
         total += 1
 
@@ -319,7 +414,9 @@ def _collect_rollout(
         next_obs, reward, terminated, truncated, step_info = env.step(action)
         done = terminated or truncated
 
-        agent.buffer.push(obs, action, reward, done, log_prob, value, action_mask=action_mask)
+        agent.buffer.push(
+            obs, action, reward, done, log_prob, value, action_mask=action_mask
+        )
 
         ep_reward += reward
         ep_len += 1
@@ -374,25 +471,35 @@ def _print_rollout_stats(
     avg_windows = np.mean(ep_windows) if ep_windows else 0.0
     num_episodes = len(ep_rewards)
 
-    print(f"--- Rollout {rollout_num}/{num_rollouts} | "
-          f"Steps: {total_steps} | "
-          f"Time: {elapsed:.1f}s ---")
-    print(f"  Episodes: {num_episodes} | "
-          f"Avg reward: {avg_reward:.3f} | "
-          f"Avg length: {avg_length:.1f} | "
-          f"Avg windows: {avg_windows:.1f}")
+    print(
+        f"--- Rollout {rollout_num}/{num_rollouts} | "
+        f"Steps: {total_steps} | "
+        f"Time: {elapsed:.1f}s ---"
+    )
+    print(
+        f"  Episodes: {num_episodes} | "
+        f"Avg reward: {avg_reward:.3f} | "
+        f"Avg length: {avg_length:.1f} | "
+        f"Avg windows: {avg_windows:.1f}"
+    )
 
     if update_metrics:
-        line = (f"  Policy loss: {update_metrics.get('policy_loss', 0):.4f} | "
-                f"Value loss: {update_metrics.get('value_loss', 0):.4f} | "
-                f"Entropy: {update_metrics.get('entropy', 0):.4f}")
+        line = (
+            f"  Policy loss: {update_metrics.get('policy_loss', 0):.4f} | "
+            f"Value loss: {update_metrics.get('value_loss', 0):.4f} | "
+            f"Entropy: {update_metrics.get('entropy', 0):.4f}"
+        )
         if "delight_mean" in update_metrics:
-            line += (f"\n  Delight: {update_metrics['delight_mean']:.4f} | "
-                     f"Gate: {update_metrics['gate_mean']:.4f}")
+            line += (
+                f"\n  Delight: {update_metrics['delight_mean']:.4f} | "
+                f"Gate: {update_metrics['gate_mean']:.4f}"
+            )
         if "alpha" in update_metrics:
-            line += (f"\n  Alpha: {update_metrics['alpha']:.4f} | "
-                     f"Alpha loss: {update_metrics['alpha_loss']:.4f} | "
-                     f"Target H: {update_metrics['target_entropy']:.4f}")
+            line += (
+                f"\n  Alpha: {update_metrics['alpha']:.4f} | "
+                f"Alpha loss: {update_metrics['alpha_loss']:.4f} | "
+                f"Target H: {update_metrics['target_entropy']:.4f}"
+            )
         print(line)
 
     # Outcome breakdown

@@ -136,22 +136,30 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
     steps_k = steps / 1000  # x-axis in thousands
 
     # ── Style ─────────────────────────────────────────────────────────
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.size": 11,
-        "axes.titlesize": 13,
-        "axes.labelsize": 12,
-        "legend.fontsize": 10,
-        "figure.dpi": 300,
-        "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.15,
-    })
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.size": 11,
+            "axes.titlesize": 13,
+            "axes.labelsize": 12,
+            "legend.fontsize": 10,
+            "figure.dpi": 300,
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.15,
+        }
+    )
 
     # ── 1. Reward curve ───────────────────────────────────────────────
     rewards = np.array([r.get("avg_reward", 0) for r in rollouts])
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(steps_k, rewards, alpha=0.25, color="#4a90e2", linewidth=0.8)
-    ax.plot(steps_k, smooth(rewards, 10), color="#4a90e2", linewidth=2, label="Smoothed (w=10)")
+    ax.plot(
+        steps_k,
+        smooth(rewards, 10),
+        color="#4a90e2",
+        linewidth=2,
+        label="Smoothed (w=10)",
+    )
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.5)
     ax.set_xlabel("Training Steps (×1K)")
     ax.set_ylabel("Average Episode Reward")
@@ -169,13 +177,21 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
     fig, ax1 = plt.subplots(figsize=(7, 4))
     color1 = "#e74c3c"
     color2 = "#2ecc71"
-    ax1.plot(steps_k, smooth(policy_loss, 10), color=color1, linewidth=1.8, label="Policy Loss")
+    ax1.plot(
+        steps_k,
+        smooth(policy_loss, 10),
+        color=color1,
+        linewidth=1.8,
+        label="Policy Loss",
+    )
     ax1.set_xlabel("Training Steps (×1K)")
     ax1.set_ylabel("Policy Loss", color=color1)
     ax1.tick_params(axis="y", labelcolor=color1)
 
     ax2 = ax1.twinx()
-    ax2.plot(steps_k, smooth(value_loss, 10), color=color2, linewidth=1.8, label="Value Loss")
+    ax2.plot(
+        steps_k, smooth(value_loss, 10), color=color2, linewidth=1.8, label="Value Loss"
+    )
     ax2.set_ylabel("Value Loss", color=color2)
     ax2.tick_params(axis="y", labelcolor=color2)
 
@@ -192,7 +208,13 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
     entropy = np.array([r.get("entropy", 0) for r in rollouts])
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(steps_k, entropy, alpha=0.25, color="#9b59b6", linewidth=0.8)
-    ax.plot(steps_k, smooth(entropy, 10), color="#9b59b6", linewidth=2, label="Smoothed (w=10)")
+    ax.plot(
+        steps_k,
+        smooth(entropy, 10),
+        color="#9b59b6",
+        linewidth=2,
+        label="Smoothed (w=10)",
+    )
     ax.set_xlabel("Training Steps (×1K)")
     ax.set_ylabel("Policy Entropy")
     ax.set_title("Policy Entropy Over Training")
@@ -206,7 +228,13 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
     lengths = np.array([r.get("avg_length", 0) for r in rollouts])
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(steps_k, lengths, alpha=0.25, color="#e67e22", linewidth=0.8)
-    ax.plot(steps_k, smooth(lengths, 10), color="#e67e22", linewidth=2, label="Smoothed (w=10)")
+    ax.plot(
+        steps_k,
+        smooth(lengths, 10),
+        color="#e67e22",
+        linewidth=2,
+        label="Smoothed (w=10)",
+    )
     ax.set_xlabel("Training Steps (×1K)")
     ax.set_ylabel("Average Episode Length (windows)")
     ax.set_title("Episode Length — Windows Before Decision")
@@ -270,9 +298,13 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
         fig, ax = plt.subplots(figsize=(8, 5))
         # sort categories so correct decisions are at the bottom
         order = [
-            "Correct Allow (TN)", "Correct Block (TP)", "Bot Caught by Puzzle (TP)",
-            "False Positive (FP)", "False Positive Puzzle (FP)",
-            "False Negative (FN)", "Bot Passed Puzzle (FN)",
+            "Correct Allow (TN)",
+            "Correct Block (TP)",
+            "Bot Caught by Puzzle (TP)",
+            "False Positive (FP)",
+            "False Positive Puzzle (FP)",
+            "False Negative (FN)",
+            "Bot Passed Puzzle (FN)",
             "Truncated",
         ]
         labels = [c for c in order if c in categories]
@@ -298,8 +330,11 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
     correct_pcts = []
     for r in rollouts:
         oc = r.get("outcomes", {})
-        correct = (oc.get("correct_allow", 0) + oc.get("correct_block", 0)
-                   + oc.get("bot_blocked_puzzle", 0))
+        correct = (
+            oc.get("correct_allow", 0)
+            + oc.get("correct_block", 0)
+            + oc.get("bot_blocked_puzzle", 0)
+        )
         correct_pcts.append(correct)
 
     correct_arr = np.array(correct_pcts)
@@ -314,10 +349,23 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
 
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(steps_k, correct_arr, alpha=0.2, color="#27ae60", linewidth=0.8)
-    ax.plot(steps_k, smooth(correct_arr, 10), color="#27ae60", linewidth=2, label="Train (smoothed)")
+    ax.plot(
+        steps_k,
+        smooth(correct_arr, 10),
+        color="#27ae60",
+        linewidth=2,
+        label="Train (smoothed)",
+    )
     if val_steps_k:
-        ax.plot(val_steps_k, val_accs, "o-", color="#e74c3c", linewidth=1.8,
-                markersize=4, label="Validation")
+        ax.plot(
+            val_steps_k,
+            val_accs,
+            "o-",
+            color="#e74c3c",
+            linewidth=1.8,
+            markersize=4,
+            label="Validation",
+        )
     ax.set_xlabel("Training Steps (×1K)")
     ax.set_ylabel("Correct Decisions (%)")
     ax.set_title("Train vs Validation Accuracy")
@@ -368,7 +416,9 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
         target_ent = rollouts[-1].get("target_entropy", 0)
 
         fig, (ax_a, ax_al) = plt.subplots(1, 2, figsize=(12, 4))
-        fig.suptitle("Soft PPO — Adaptive Entropy Temperature", fontsize=13, fontweight="bold")
+        fig.suptitle(
+            "Soft PPO — Adaptive Entropy Temperature", fontsize=13, fontweight="bold"
+        )
 
         ax_a.plot(steps_k, alpha_vals, alpha=0.25, color="#e67e22", linewidth=0.8)
         ax_a.plot(steps_k, smooth(alpha_vals, 10), color="#e67e22", linewidth=2)
@@ -391,9 +441,13 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
         print(f"  Saved soft_ppo_metrics.{fmt}")
 
     # ── 8. Combined 2×2 summary figure ────────────────────────────────
-    algo_name = "Soft-PPO+LSTM" if has_soft_ppo else ("DG+LSTM" if has_dg else "PPO+LSTM")
+    algo_name = (
+        "Soft-PPO+LSTM" if has_soft_ppo else ("DG+LSTM" if has_dg else "PPO+LSTM")
+    )
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle(f"{algo_name} Training Summary", fontsize=15, fontweight="bold", y=0.98)
+    fig.suptitle(
+        f"{algo_name} Training Summary", fontsize=15, fontweight="bold", y=0.98
+    )
 
     # reward
     ax = axes[0, 0]
@@ -407,9 +461,13 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
 
     # losses
     ax = axes[0, 1]
-    ax.plot(steps_k, smooth(policy_loss, 10), color="#e74c3c", linewidth=1.8, label="Policy")
+    ax.plot(
+        steps_k, smooth(policy_loss, 10), color="#e74c3c", linewidth=1.8, label="Policy"
+    )
     ax_v = ax.twinx()
-    ax_v.plot(steps_k, smooth(value_loss, 10), color="#2ecc71", linewidth=1.8, label="Value")
+    ax_v.plot(
+        steps_k, smooth(value_loss, 10), color="#2ecc71", linewidth=1.8, label="Value"
+    )
     ax.set_xlabel("Steps (×1K)")
     ax.set_ylabel("Policy Loss", color="#e74c3c")
     ax_v.set_ylabel("Value Loss", color="#2ecc71")
@@ -429,10 +487,19 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
 
     # accuracy (train vs val)
     ax = axes[1, 1]
-    ax.plot(steps_k, smooth(correct_arr, 10), color="#27ae60", linewidth=2, label="Train")
+    ax.plot(
+        steps_k, smooth(correct_arr, 10), color="#27ae60", linewidth=2, label="Train"
+    )
     if val_steps_k:
-        ax.plot(val_steps_k, val_accs, "o-", color="#e74c3c", linewidth=1.8,
-                markersize=3, label="Validation")
+        ax.plot(
+            val_steps_k,
+            val_accs,
+            "o-",
+            color="#e74c3c",
+            linewidth=1.8,
+            markersize=3,
+            label="Validation",
+        )
     ax.set_xlabel("Steps (×1K)")
     ax.set_ylabel("Correct (%)")
     ax.set_title("(d) Train vs Validation Accuracy")
@@ -450,11 +517,22 @@ def plot_all(rollouts: list[dict], out_dir: Path, fmt: str = "png"):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Visualize PPO training logs for research papers")
-    parser.add_argument("--log", type=str, default="training.log", help="Path to training.log")
-    parser.add_argument("--out", type=str, default="figures", help="Output directory for figures")
-    parser.add_argument("--format", type=str, default="png", choices=["png", "pdf", "svg"],
-                        help="Figure format (pdf recommended for papers)")
+    parser = argparse.ArgumentParser(
+        description="Visualize PPO training logs for research papers"
+    )
+    parser.add_argument(
+        "--log", type=str, default="training.log", help="Path to training.log"
+    )
+    parser.add_argument(
+        "--out", type=str, default="figures", help="Output directory for figures"
+    )
+    parser.add_argument(
+        "--format",
+        type=str,
+        default="png",
+        choices=["png", "pdf", "svg"],
+        help="Figure format (pdf recommended for papers)",
+    )
     args = parser.parse_args()
 
     log_path = Path(args.log)
@@ -469,7 +547,9 @@ def main():
         print("No rollout data found in log file.")
         return
 
-    print(f"Found {len(rollouts)} rollouts ({rollouts[0]['steps']} – {rollouts[-1]['steps']} steps)")
+    print(
+        f"Found {len(rollouts)} rollouts ({rollouts[0]['steps']} – {rollouts[-1]['steps']} steps)"
+    )
     plot_all(rollouts, Path(args.out), fmt=args.format)
 
 

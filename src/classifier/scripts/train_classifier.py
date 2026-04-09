@@ -44,36 +44,49 @@ from rl_captcha.config import ClassifierConfig
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Train human-likelihood classifier")
     p.add_argument(
-        "--data-dir", type=str, default="data/",
+        "--data-dir",
+        type=str,
+        default="data/",
         help="Path to data directory with human/ and bot/ subdirs",
     )
     p.add_argument(
-        "--output-dir", type=str, default="classifier/models/xgb_v1",
+        "--output-dir",
+        type=str,
+        default="classifier/models/xgb_v1",
         help="Directory to save the trained model",
     )
     p.add_argument(
-        "--test-size", type=float, default=0.2,
+        "--test-size",
+        type=float,
+        default=0.2,
         help="Fraction of data to hold out for testing (default: 0.2)",
     )
     p.add_argument(
-        "--random-state", type=int, default=42,
+        "--random-state",
+        type=int,
+        default=42,
         help="Random seed for reproducibility",
     )
     p.add_argument(
-        "--no-adversarial", action="store_true",
+        "--no-adversarial",
+        action="store_true",
         help="Disable feature-level adversarial augmentation",
     )
     p.add_argument(
-        "--adversarial-augment", action="store_true",
+        "--adversarial-augment",
+        action="store_true",
         help="Include pre-generated adversarially augmented bot sessions "
-             "from data/bot_augmented/ (run generate_augmented_data.py first)",
+        "from data/bot_augmented/ (run generate_augmented_data.py first)",
     )
     p.add_argument(
-        "--tune", action="store_true",
+        "--tune",
+        action="store_true",
         help="Run Optuna hyperparameter tuning before final training",
     )
     p.add_argument(
-        "--n-trials", type=int, default=50,
+        "--n-trials",
+        type=int,
+        default=50,
         help="Number of Optuna trials (default: 50)",
     )
     return p.parse_args()
@@ -111,13 +124,17 @@ def tune_hyperparameters(
             feature_noise_std=trial.suggest_float("feature_noise_std", 0.0, 1.0),
             n_augment_copies=trial.suggest_int("n_augment_copies", 0, 5),
             label_smooth_alpha=trial.suggest_float("label_smooth_alpha", 0.0, 0.15),
-            adversarial_augment=trial.suggest_categorical("adversarial_augment", [True, False]),
+            adversarial_augment=trial.suggest_categorical(
+                "adversarial_augment", [True, False]
+            ),
             n_adversarial_copies=trial.suggest_int("n_adversarial_copies", 1, 4),
             adversarial_blend_range=(
                 trial.suggest_float("adv_blend_lo", 0.1, 0.4),
                 trial.suggest_float("adv_blend_hi", 0.3, 0.7),
             ),
-            adversarial_noise_std=trial.suggest_float("adversarial_noise_std", 0.1, 0.5),
+            adversarial_noise_std=trial.suggest_float(
+                "adversarial_noise_std", 0.1, 0.5
+            ),
             random_state=random_state,
         )
 
@@ -179,7 +196,9 @@ def main() -> None:
 
     labeled = [s for s in sessions if s.label is not None]
     if not labeled:
-        print("ERROR: No labeled sessions found. Check data/human/ and data/bot/ directories.")
+        print(
+            "ERROR: No labeled sessions found. Check data/human/ and data/bot/ directories."
+        )
         sys.exit(1)
 
     # Separate originals from any pre-generated augmented copies; the test
@@ -189,7 +208,7 @@ def main() -> None:
     aug_sessions = [s for s in labeled if is_augmented(s)]
 
     humans = [s for s in originals if s.label == 1]
-    bots   = [s for s in originals if s.label == 0]
+    bots = [s for s in originals if s.label == 0]
     print(f"  Human sessions : {len(humans)}")
     print(f"  Bot sessions   : {len(bots)}")
     print(f"  Augmented bots : {len(aug_sessions)}")
@@ -216,12 +235,12 @@ def main() -> None:
     )
 
     train_sessions = [originals[i] for i in train_idx]
-    test_sessions  = [originals[i] for i in test_idx]
+    test_sessions = [originals[i] for i in test_idx]
 
     n_h_train = sum(1 for s in train_sessions if s.label == 1)
     n_b_train = sum(1 for s in train_sessions if s.label == 0)
-    n_h_test  = sum(1 for s in test_sessions if s.label == 1)
-    n_b_test  = sum(1 for s in test_sessions if s.label == 0)
+    n_h_test = sum(1 for s in test_sessions if s.label == 1)
+    n_b_test = sum(1 for s in test_sessions if s.label == 0)
 
     print(f"\n  Train set: {len(train_sessions)} ({n_h_train}H / {n_b_train}B)")
     print(f"  Test set : {len(test_sessions)} ({n_h_test}H / {n_b_test}B)")
@@ -231,10 +250,14 @@ def main() -> None:
     # ------------------------------------------------------------------
     if aug_sessions:
         train_sessions = train_sessions + aug_sessions
-        print(f"  Train set after augmentation: {len(train_sessions)} "
-              f"({n_h_train}H / {n_b_train + len(aug_sessions)}B)")
+        print(
+            f"  Train set after augmentation: {len(train_sessions)} "
+            f"({n_h_train}H / {n_b_train + len(aug_sessions)}B)"
+        )
     elif args.adversarial_augment:
-        print("  WARNING: --adversarial-augment is on but no augmented sessions were loaded.")
+        print(
+            "  WARNING: --adversarial-augment is on but no augmented sessions were loaded."
+        )
 
     # ------------------------------------------------------------------
     # 3. Extract features
@@ -243,8 +266,8 @@ def main() -> None:
     extractor = SessionFeatureExtractor()
     X_train = extractor.extract_many(train_sessions)
     y_train = np.array([s.label for s in train_sessions], dtype=int)
-    X_test  = extractor.extract_many(test_sessions)
-    y_test  = np.array([s.label for s in test_sessions], dtype=int)
+    X_test = extractor.extract_many(test_sessions)
+    y_test = np.array([s.label for s in test_sessions], dtype=int)
 
     print(f"  Train feature matrix: {X_train.shape}")
     print(f"  Test feature matrix : {X_test.shape}")
@@ -256,8 +279,12 @@ def main() -> None:
     if args.no_adversarial:
         config.adversarial_augment = False
     if args.tune:
-        print(f"\n[train_classifier] Running Optuna tuning ({args.n_trials} trials) ...")
-        config = tune_hyperparameters(X_train, y_train, args.n_trials, args.random_state)
+        print(
+            f"\n[train_classifier] Running Optuna tuning ({args.n_trials} trials) ..."
+        )
+        config = tune_hyperparameters(
+            X_train, y_train, args.n_trials, args.random_state
+        )
 
     # ------------------------------------------------------------------
     # 5. Train
@@ -269,11 +296,11 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 6. Evaluate on held-out test set (never seen during training)
     # ------------------------------------------------------------------
-    y_pred  = clf.predict(X_test)
+    y_pred = clf.predict(X_test)
     y_score = clf.human_score(X_test)
 
     acc = accuracy_score(y_test, y_pred)
-    f1  = f1_score(y_test, y_pred, zero_division=0)
+    f1 = f1_score(y_test, y_pred, zero_division=0)
     try:
         auc = roc_auc_score(y_test, y_score)
     except ValueError:

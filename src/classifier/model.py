@@ -107,6 +107,7 @@ class HumanLikelihoodClassifier:
         # regardless of their original scale.
         if cfg.standardize:
             from sklearn.preprocessing import StandardScaler
+
             self._scaler = StandardScaler()
             X_scaled = self._scaler.fit_transform(X.astype(np.float64))
         else:
@@ -136,7 +137,11 @@ class HumanLikelihoodClassifier:
                     blend = rng_adv.uniform(blend_lo, blend_hi, size=(len(bot_X), 1))
                     humanized = bot_X + blend * (human_mean - bot_X)
                     # Add noise scaled to human feature variability
-                    noise = rng_adv.normal(0, 1, size=humanized.shape) * human_std * cfg.adversarial_noise_std
+                    noise = (
+                        rng_adv.normal(0, 1, size=humanized.shape)
+                        * human_std
+                        * cfg.adversarial_noise_std
+                    )
                     humanized += noise
                     adv_X_parts.append(humanized)
                     adv_y_parts.append(np.zeros(len(bot_X), dtype=int))  # still bots
@@ -145,8 +150,10 @@ class HumanLikelihoodClassifier:
                 y_arr = np.concatenate([y_arr] + adv_y_parts)
 
                 n_adv = sum(len(p) for p in adv_X_parts)
-                print(f"  [adversarial] Added {n_adv} humanized bot samples "
-                      f"(blend={blend_lo:.1f}-{blend_hi:.1f}, noise_std={cfg.adversarial_noise_std})")
+                print(
+                    f"  [adversarial] Added {n_adv} humanized bot samples "
+                    f"(blend={blend_lo:.1f}-{blend_hi:.1f}, noise_std={cfg.adversarial_noise_std})"
+                )
 
         # --- Multi-copy noise augmentation ---
         # Generate multiple noisy copies of the training data so the model
@@ -157,7 +164,11 @@ class HumanLikelihoodClassifier:
             augmented_X = [X_scaled]
             augmented_y = [y_arr]
             for _ in range(cfg.n_augment_copies):
-                noise = rng.normal(0, 1, size=X_scaled.shape) * feature_stds * cfg.feature_noise_std
+                noise = (
+                    rng.normal(0, 1, size=X_scaled.shape)
+                    * feature_stds
+                    * cfg.feature_noise_std
+                )
                 augmented_X.append(X_scaled + noise)
                 augmented_y.append(y_arr)
             X_train = np.vstack(augmented_X)
@@ -192,7 +203,9 @@ class HumanLikelihoodClassifier:
             gamma=cfg.gamma,
             scale_pos_weight=scale_pos_weight,
             eval_metric=cfg.eval_metric,
-            early_stopping_rounds=cfg.early_stopping_rounds if X_val is not None else None,
+            early_stopping_rounds=(
+                cfg.early_stopping_rounds if X_val is not None else None
+            ),
             random_state=cfg.random_state,
         )
 
@@ -264,7 +277,9 @@ class HumanLikelihoodClassifier:
         importances = self._model.feature_importances_
         if feature_names is None:
             feature_names = [f"f{i}" for i in range(len(importances))]
-        pairs = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+        pairs = sorted(
+            zip(feature_names, importances), key=lambda x: x[1], reverse=True
+        )
         return {name: round(float(score), 6) for name, score in pairs}
 
     # ------------------------------------------------------------------
@@ -297,7 +312,7 @@ class HumanLikelihoodClassifier:
     def load(cls, directory: str | Path) -> "HumanLikelihoodClassifier":
         """Load a saved classifier from *directory*."""
         directory = Path(directory)
-        model_path  = directory / cls.MODEL_FILENAME
+        model_path = directory / cls.MODEL_FILENAME
         config_path = directory / cls.CONFIG_FILENAME
         scaler_path = directory / cls.SCALER_FILENAME
 
@@ -330,9 +345,7 @@ class HumanLikelihoodClassifier:
 
     def _check_fitted(self) -> None:
         if not self._is_fitted or self._model is None:
-            raise RuntimeError(
-                "Classifier is not fitted. Call fit() or load() first."
-            )
+            raise RuntimeError("Classifier is not fitted. Call fit() or load() first.")
 
     def __repr__(self) -> str:
         status = "fitted" if self._is_fitted else "not fitted"

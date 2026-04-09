@@ -28,9 +28,9 @@ class DBConfig:
 class FeatureConfig:
     """Feature extraction parameters for the session-level classifier."""
 
-    mouse_speed_cap: float = 10_000.0      # px/s — clamp extreme speeds
-    jitter_threshold: float = 3.0          # px — movements below this are jitter
-    pause_threshold_ms: float = 500.0      # ms — gaps longer than this count as pauses
+    mouse_speed_cap: float = 10_000.0  # px/s — clamp extreme speeds
+    jitter_threshold: float = 3.0  # px — movements below this are jitter
+    pause_threshold_ms: float = 500.0  # ms — gaps longer than this count as pauses
 
 
 @dataclass
@@ -45,36 +45,39 @@ class ClassifierConfig:
 
     n_estimators: int = 200
     max_depth: int = 3
-    learning_rate: float = 0.05            # slow learning + early stopping
-    subsample: float = 0.7                 # row subsampling per tree
-    colsample_bytree: float = 0.7          # feature subsampling per tree
-    min_child_weight: int = 5              # prevent leaf nodes with few samples
-    reg_alpha: float = 0.3                 # L1 regularization
-    reg_lambda: float = 2.0                # L2 regularization
-    gamma: float = 0.3                     # min loss reduction for a split
+    learning_rate: float = 0.05  # slow learning + early stopping
+    subsample: float = 0.7  # row subsampling per tree
+    colsample_bytree: float = 0.7  # feature subsampling per tree
+    min_child_weight: int = 5  # prevent leaf nodes with few samples
+    reg_alpha: float = 0.3  # L1 regularization
+    reg_lambda: float = 2.0  # L2 regularization
+    gamma: float = 0.3  # min loss reduction for a split
     eval_metric: str = "logloss"
     early_stopping_rounds: int = 20
     random_state: int = 42
 
     # Label smoothing: shift hard 0/1 labels toward 0.5 to encourage
     # calibrated probability outputs and reduce overconfidence.
-    label_smooth_alpha: float = 0.05       # 0→0.05, 1→0.95
+    label_smooth_alpha: float = 0.05  # 0→0.05, 1→0.95
 
     # Feature noise augmentation: add Gaussian noise to training features
     # to simulate data variation and prevent reliance on exact values.
-    feature_noise_std: float = 0.5          # std of noise relative to feature std
-    n_augment_copies: int = 3              # number of noisy copies to generate
+    feature_noise_std: float = 0.5  # std of noise relative to feature std
+    n_augment_copies: int = 3  # number of noisy copies to generate
 
     # Adversarial augmentation: create "humanized" copies of bot samples
     # by interpolating features toward the human distribution. Forces the
     # classifier to learn deeper patterns instead of surface-level differences.
-    adversarial_augment: bool = True        # enable adversarial bot humanization
-    n_adversarial_copies: int = 2           # humanized copies per bot sample
-    adversarial_blend_range: tuple = (0.2, 0.6)  # (min, max) interpolation toward human mean
-    adversarial_noise_std: float = 0.3      # extra Gaussian noise on blended features
+    adversarial_augment: bool = True  # enable adversarial bot humanization
+    n_adversarial_copies: int = 2  # humanized copies per bot sample
+    adversarial_blend_range: tuple = (
+        0.2,
+        0.6,
+    )  # (min, max) interpolation toward human mean
+    adversarial_noise_std: float = 0.3  # extra Gaussian noise on blended features
 
     # Feature standardization
-    standardize: bool = True               # apply StandardScaler before training
+    standardize: bool = True  # apply StandardScaler before training
 
 
 @dataclass
@@ -100,22 +103,24 @@ class EventEnvConfig:
     """
 
     # Event encoding
-    event_dim: int = 26               # windowed feature vector dimension
-    mouse_subsample: int = 5          # keep every Nth mouse event (66Hz → ~13Hz)
-    window_size: int = 30             # events per observation window
+    event_dim: int = 26  # windowed feature vector dimension
+    mouse_subsample: int = 5  # keep every Nth mouse event (66Hz → ~13Hz)
+    window_size: int = 30  # events per observation window
 
     # Session limits
-    min_events: int = 10              # skip sessions with fewer events
-    max_windows: int = 256            # cap windows per episode (subsample if longer)
+    min_events: int = 10  # skip sessions with fewer events
+    max_windows: int = 256  # cap windows per episode (subsample if longer)
 
     # Action costs (continue / honeypot; puzzle friction for humans is human_puzzle_friction)
     action_costs: list[float] = field(
         default_factory=lambda: [
-            0.0,    # continue
-            0.0,    # deploy_honeypot
-            0.0,    # easy_puzzle (unused — see human_puzzle_friction)
-            0.0, 0.0,
-            0.0, 0.0,
+            0.0,  # continue
+            0.0,  # deploy_honeypot
+            0.0,  # easy_puzzle (unused — see human_puzzle_friction)
+            0.0,
+            0.0,
+            0.0,
+            0.0,
         ]
     )
 
@@ -128,16 +133,22 @@ class EventEnvConfig:
     human_puzzle_friction: dict[int, float] = field(
         default_factory=lambda: {2: -0.05, 3: -0.20, 4: -0.40},
     )
-    penalty_human_puzzle_fail: float = -1.0   # human fails puzzle (false alarm)
-    penalty_bot_passes_puzzle: float = -0.5   # bot slips through challenge
+    penalty_human_puzzle_fail: float = -1.0  # human fails puzzle (false alarm)
+    penalty_bot_passes_puzzle: float = -0.5  # bot slips through challenge
 
-    reward_direct_block_bot: float = 0.7      # block without puzzle evidence (less preferred)
-    penalty_block_human: float = -1.5         # direct block human — worst UX
-    penalty_bot_missed_allow: float = -1.0    # allow a bot (false negative)
+    reward_direct_block_bot: float = (
+        0.7  # block without puzzle evidence (less preferred)
+    )
+    penalty_block_human: float = -1.5  # direct block human — worst UX
+    penalty_bot_missed_allow: float = -1.0  # allow a bot (false negative)
 
-    reward_correct_allow: float = 0.5         # allow human
-    penalty_false_negative: float = -1.0      # kept for scripts; allow-bot uses penalty_bot_missed_allow
-    penalty_false_positive: float = -1.0      # legacy / train --fp-penalty (human puzzle fail)
+    reward_correct_allow: float = 0.5  # allow human
+    penalty_false_negative: float = (
+        -1.0
+    )  # kept for scripts; allow-bot uses penalty_bot_missed_allow
+    penalty_false_positive: float = (
+        -1.0
+    )  # legacy / train --fp-penalty (human puzzle fail)
     continue_penalty: float = 0.001
     honeypot_info_bonus: float = 0.5
     truncation_penalty: float = -0.5
@@ -146,9 +157,9 @@ class EventEnvConfig:
     # Puzzle pass rates: {action_index: (human_pass, bot_pass)}
     puzzle_pass_rates: dict = field(
         default_factory=lambda: {
-            2: (0.95, 0.40),   # easy
-            3: (0.85, 0.15),   # medium
-            4: (0.70, 0.05),   # hard
+            2: (0.95, 0.40),  # easy
+            3: (0.85, 0.15),  # medium
+            4: (0.70, 0.05),  # hard
         }
     )
 
@@ -166,23 +177,23 @@ class EventEnvConfig:
     honeypot_trigger_rate_human: float = 0.01
 
     # Data augmentation (per-episode during training)
-    augment: bool = True              # enable stochastic augmentation
-    augment_prob: float = 0.5         # probability of augmenting each episode
-    aug_position_noise_std: float = 15.0   # Gaussian noise on x/y coords (px)
-    aug_timing_jitter_std: float = 30.0    # Gaussian noise on timestamps (ms)
+    augment: bool = True  # enable stochastic augmentation
+    augment_prob: float = 0.5  # probability of augmenting each episode
+    aug_position_noise_std: float = 15.0  # Gaussian noise on x/y coords (px)
+    aug_timing_jitter_std: float = 30.0  # Gaussian noise on timestamps (ms)
     aug_speed_warp_range: tuple = (0.7, 1.4)  # random time stretch/compress
     # Human augmentation uses lighter perturbation to simulate natural variation
     augment_human: bool = True
-    aug_human_position_noise_std: float = 5.0    # lighter jitter than bots
-    aug_human_timing_jitter_std: float = 15.0    # lighter timing noise
+    aug_human_position_noise_std: float = 5.0  # lighter jitter than bots
+    aug_human_timing_jitter_std: float = 15.0  # lighter timing noise
     aug_human_speed_warp_range: tuple = (0.85, 1.15)  # narrower warp
 
     # Normalization constants for event encoding
     max_coord_x: float = 1920.0
     max_coord_y: float = 1080.0
     max_dt_ms: float = 5000.0
-    max_speed: float = 5000.0        # px/s
-    max_scroll_dy: float = 500.0     # px
+    max_speed: float = 5000.0  # px/s
+    max_scroll_dy: float = 500.0  # px
 
 
 @dataclass

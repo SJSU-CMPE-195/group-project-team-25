@@ -74,6 +74,7 @@ class SoftPPOLSTM(PPOLSTM):
 
         # Target entropy: H* = ratio * log(|A|)
         import math
+
         self.target_entropy = config.target_entropy_ratio * math.log(action_dim)
 
         # Learnable log-temperature
@@ -147,15 +148,22 @@ class SoftPPOLSTM(PPOLSTM):
                 # ── PPO clipped surrogate (unchanged) ────────────
                 ratio = (new_log_probs - old_log_probs).exp()
                 surr1 = ratio * advantages
-                surr2 = torch.clamp(
-                    ratio, 1.0 - cfg.clip_eps, 1.0 + cfg.clip_eps,
-                ) * advantages
+                surr2 = (
+                    torch.clamp(
+                        ratio,
+                        1.0 - cfg.clip_eps,
+                        1.0 + cfg.clip_eps,
+                    )
+                    * advantages
+                )
                 policy_loss = -torch.min(surr1, surr2).mean()
 
                 # ── Clipped value loss (unchanged) ───────────────
                 old_values = seg["old_values"].to(self.device)
                 v_clipped = old_values + torch.clamp(
-                    values - old_values, -cfg.clip_eps, cfg.clip_eps,
+                    values - old_values,
+                    -cfg.clip_eps,
+                    cfg.clip_eps,
                 )
                 vl_unclipped = (values - returns) ** 2
                 vl_clipped = (v_clipped - returns) ** 2
@@ -172,13 +180,14 @@ class SoftPPOLSTM(PPOLSTM):
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(
-                    self.network.parameters(), cfg.max_grad_norm,
+                    self.network.parameters(),
+                    cfg.max_grad_norm,
                 )
                 self.optimizer.step()
 
                 # ── α update: dual gradient descent ──────────────
                 # Increase α when entropy is below target, decrease when above
-                alpha_loss = (self.alpha * (entropy.detach() - self.target_entropy))
+                alpha_loss = self.alpha * (entropy.detach() - self.target_entropy)
                 self.alpha_optimizer.zero_grad()
                 alpha_loss.backward()
                 self.alpha_optimizer.step()
@@ -210,6 +219,7 @@ class SoftPPOLSTM(PPOLSTM):
     def save(self, path) -> None:
         """Save network, optimizer, and α state."""
         from pathlib import Path as P
+
         path = P(path)
         # Let parent save the main checkpoint
         super().save(path)
@@ -226,6 +236,7 @@ class SoftPPOLSTM(PPOLSTM):
     def load(self, path) -> None:
         """Load network, optimizer, and α state from checkpoint."""
         from pathlib import Path as P
+
         path = P(path)
         super().load(path)
         alpha_path = path / "soft_ppo_alpha.pt"

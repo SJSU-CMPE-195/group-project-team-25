@@ -62,11 +62,13 @@ class RolloutBuffer:
 
     def mark_episode_start(self, h: torch.Tensor, c: torch.Tensor):
         """Record LSTM hidden state at the start of a new episode."""
-        self.episode_starts.append((
-            self.ptr,
-            h.detach().cpu().clone(),
-            c.detach().cpu().clone(),
-        ))
+        self.episode_starts.append(
+            (
+                self.ptr,
+                h.detach().cpu().clone(),
+                c.detach().cpu().clone(),
+            )
+        )
 
     def push(
         self,
@@ -80,7 +82,9 @@ class RolloutBuffer:
     ):
         """Store one transition."""
         if self.ptr >= self.capacity:
-            warnings.warn(f"RolloutBuffer overflow: ptr={self.ptr} >= capacity={self.capacity}, dropping transition")
+            warnings.warn(
+                f"RolloutBuffer overflow: ptr={self.ptr} >= capacity={self.capacity}, dropping transition"
+            )
             return
         self.observations[self.ptr] = obs
         self.actions[self.ptr] = action
@@ -109,7 +113,11 @@ class RolloutBuffer:
                 next_value = self.values[t + 1]
 
             next_non_terminal = 1.0 - self.dones[t]
-            delta = self.rewards[t] + gamma * next_value * next_non_terminal - self.values[t]
+            delta = (
+                self.rewards[t]
+                + gamma * next_value * next_non_terminal
+                - self.values[t]
+            )
             last_gae = delta + gamma * gae_lambda * next_non_terminal * last_gae
             self.advantages[t] = last_gae
 
@@ -138,16 +146,28 @@ class RolloutBuffer:
             if end_idx <= start_idx:
                 continue
 
-            segments.append({
-                "obs": torch.from_numpy(self.observations[start_idx:end_idx].copy()),
-                "actions": torch.from_numpy(self.actions[start_idx:end_idx].copy()),
-                "action_masks": torch.from_numpy(self.action_masks[start_idx:end_idx].copy()),
-                "old_log_probs": torch.from_numpy(self.log_probs[start_idx:end_idx].copy()),
-                "old_values": torch.from_numpy(self.values[start_idx:end_idx].copy()),
-                "advantages": torch.from_numpy(self.advantages[start_idx:end_idx].copy()),
-                "returns": torch.from_numpy(self.returns[start_idx:end_idx].copy()),
-                "h0": h0,
-                "c0": c0,
-            })
+            segments.append(
+                {
+                    "obs": torch.from_numpy(
+                        self.observations[start_idx:end_idx].copy()
+                    ),
+                    "actions": torch.from_numpy(self.actions[start_idx:end_idx].copy()),
+                    "action_masks": torch.from_numpy(
+                        self.action_masks[start_idx:end_idx].copy()
+                    ),
+                    "old_log_probs": torch.from_numpy(
+                        self.log_probs[start_idx:end_idx].copy()
+                    ),
+                    "old_values": torch.from_numpy(
+                        self.values[start_idx:end_idx].copy()
+                    ),
+                    "advantages": torch.from_numpy(
+                        self.advantages[start_idx:end_idx].copy()
+                    ),
+                    "returns": torch.from_numpy(self.returns[start_idx:end_idx].copy()),
+                    "h0": h0,
+                    "c0": c0,
+                }
+            )
 
         return segments

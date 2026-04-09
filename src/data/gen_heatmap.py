@@ -23,6 +23,7 @@ EVENT_LABEL = {
     "click": "Mouse Clicks",
 }
 
+
 # Read the file and return tuple of (concert_select_page, section_select_page , checkout_page) based on event type sent ("mouse" || "click")
 def read_file(file, eventType):
     folder = Path(file)
@@ -64,34 +65,38 @@ def read_file(file, eventType):
 
         for seg in segments:
             for event in seg.get("mouse", []):
-                mouse_events.append({
-                    "t": event.get("t"),
-                    "x": event.get("x"),
-                    "y": event.get("y"),
-                })
+                mouse_events.append(
+                    {
+                        "t": event.get("t"),
+                        "x": event.get("x"),
+                        "y": event.get("y"),
+                    }
+                )
 
             for event in seg.get("clicks", []):
                 target = event.get("target", {})
-                click_events.append({
-                    "t": event.get("t"),
-                    "x": event.get("x"),
-                    "y": event.get("y"),
-                    "target_classes": target.get("classes"),
-                })
+                click_events.append(
+                    {
+                        "t": event.get("t"),
+                        "x": event.get("x"),
+                        "y": event.get("y"),
+                        "target_classes": target.get("classes"),
+                    }
+                )
 
             for event in seg.get("scroll", []):
-                scroll_events.append({
-                    "t": event.get("t"),
-                    "dy": event.get("dy")
-                })
+                scroll_events.append({"t": event.get("t"), "dy": event.get("dy")})
 
-        new_concert_select_page, new_section_select_page, new_checkout_page = separate_pages(mouse_events, click_events, scroll_events, eventType)
+        new_concert_select_page, new_section_select_page, new_checkout_page = (
+            separate_pages(mouse_events, click_events, scroll_events, eventType)
+        )
 
         concert_select_page += new_concert_select_page
         section_select_page += new_section_select_page
         checkout_page += new_checkout_page
 
-    return concert_select_page, section_select_page , checkout_page
+    return concert_select_page, section_select_page, checkout_page
+
 
 # Helper funciton to separate the events into each page (home, seats, checkout)
 def separate_pages(mouse_events, click_events, scroll_events, eventType):
@@ -103,7 +108,8 @@ def separate_pages(mouse_events, click_events, scroll_events, eventType):
     button_times = {
         item["target_classes"]: item["t"]
         for item in click_events
-        if item.get("target_classes") in {"home-button", "tickets-button", "ss-checkout-btn"}
+        if item.get("target_classes")
+        in {"home-button", "tickets-button", "ss-checkout-btn"}
     }
 
     t_home = button_times.get("home-button", float("-inf"))
@@ -114,7 +120,7 @@ def separate_pages(mouse_events, click_events, scroll_events, eventType):
         t = event["t"]
 
         # Some of our data is weird, this removes those data points
-        if(event["x"] == 0): 
+        if event["x"] == 0:
             return
 
         if t < t_home:
@@ -134,19 +140,18 @@ def separate_pages(mouse_events, click_events, scroll_events, eventType):
         nonlocal scroll_idx, total_dy
 
         # Add all scroll deltas that happened at or before this event's timestamp
-        while scroll_idx < len(scroll_events) and scroll_events[scroll_idx]["t"] <= event["t"]:
+        while (
+            scroll_idx < len(scroll_events)
+            and scroll_events[scroll_idx]["t"] <= event["t"]
+        ):
             total_dy = scroll_events[scroll_idx]["dy"]  # overwrite, not accumulate
             scroll_idx += 1
 
-        return {
-            "x": event["x"],
-            "y": event["y"] - total_dy,
-            "t": event["t"]
-        }
+        return {"x": event["x"], "y": event["y"] - total_dy, "t": event["t"]}
 
-    if(eventType == "mouse"):
+    if eventType == "mouse":
         events = [("mouse", m, 1) for m in mouse_events]
-    elif(eventType == "click"):
+    elif eventType == "click":
         events = [("click", c, 1) for c in click_events]
 
     for _, event, weight in events:
@@ -154,6 +159,7 @@ def separate_pages(mouse_events, click_events, scroll_events, eventType):
         classify(adjusted_event, weight)
 
     return concert_select_page, section_select_page, checkout_page
+
 
 # Helper function to filter out the vertical data: returns a list with the middle 96% remaining
 def filter_y_outliers(points, low_q=0.02, high_q=0.98):
@@ -166,15 +172,18 @@ def filter_y_outliers(points, low_q=0.02, high_q=0.98):
 
     return [p for p in points if low <= p["y"] <= high]
 
+
 # Takes a list of 3 point lists, title and page then display the stats and heatmap
 def plot_heatmaps(points_list, title, page):
-    plt.rcParams.update({
-        "axes.titlesize": 16,
-        "axes.labelsize": 16,
-        "xtick.labelsize": 14,
-        "ytick.labelsize": 14
-    })
-    
+    plt.rcParams.update(
+        {
+            "axes.titlesize": 16,
+            "axes.labelsize": 16,
+            "xtick.labelsize": 14,
+            "ytick.labelsize": 14,
+        }
+    )
+
     fig, axes = plt.subplots(1, 3, figsize=(16, 6), dpi=125, constrained_layout=True)
     MAP_NAMES = ("Human Events", "Bot Events", "Augmented Bot Events")
 
@@ -189,14 +198,18 @@ def plot_heatmaps(points_list, title, page):
         xs = np.array([p["x"] for p in points], dtype=float)
         ys = np.array([p["y"] for p in points], dtype=float)
         raw_weights = np.array([p["weight"] for p in points], dtype=float)
-        weights = (raw_weights / raw_weights.sum()) * 100 if raw_weights.sum() > 0 else raw_weights
+        weights = (
+            (raw_weights / raw_weights.sum()) * 100
+            if raw_weights.sum() > 0
+            else raw_weights
+        )
 
         H, _, _ = np.histogram2d(
             xs,
             ys,
             bins=bins,
             range=[[xs.min(), xs.max()], [ys.min(), ys.max()]],
-            weights=weights
+            weights=weights,
         )
 
         nonzero = H[H > 0]
@@ -209,8 +222,15 @@ def plot_heatmaps(points_list, title, page):
         print("Total data points:", len(points))
         p = H / H.sum()
         p = p[p > 0]
-        print("Spatial entropy (Higher = more spread out | Lower = more concentrated):", f"{-np.sum(p * np.log2(p)):.2f}")
-        print("Occupied bins:", f"{np.sum(H > 0)} / {bins ** 2}", f"= {(np.sum(H > 0)/bins ** 2) * 100:.2f}% of space used")
+        print(
+            "Spatial entropy (Higher = more spread out | Lower = more concentrated):",
+            f"{-np.sum(p * np.log2(p)):.2f}",
+        )
+        print(
+            "Occupied bins:",
+            f"{np.sum(H > 0)} / {bins ** 2}",
+            f"= {(np.sum(H > 0)/bins ** 2) * 100:.2f}% of space used",
+        )
         print("Peak concentration (max bin):", f"{H.max():.2f}%")
         print("X-axis variance:", f"{np.var(xs):.2f}")
         print("Unique X-axis positions:", len(np.unique(xs)), "\n")
@@ -221,7 +241,11 @@ def plot_heatmaps(points_list, title, page):
         xs = np.array([p["x"] for p in points], dtype=float)
         ys = np.array([p["y"] for p in points], dtype=float)
         raw_weights = np.array([p["weight"] for p in points], dtype=float)
-        weights = (raw_weights / raw_weights.sum()) * 100 if raw_weights.sum() > 0 else raw_weights
+        weights = (
+            (raw_weights / raw_weights.sum()) * 100
+            if raw_weights.sum() > 0
+            else raw_weights
+        )
 
         h = sns.histplot(
             x=xs,
@@ -233,7 +257,7 @@ def plot_heatmaps(points_list, title, page):
             alpha=0.9,
             vmax=vmax,
             cbar=False,
-            ax=axes[i]
+            ax=axes[i],
         )
 
         if mappable is None:
@@ -249,16 +273,17 @@ def plot_heatmaps(points_list, title, page):
 
         axes[i].invert_yaxis()
         axes[i].margins(x=0.05)
-        
+
         mean_x = np.mean(xs)
         mean_y = np.mean(ys)
         axes[i].scatter(
-            mean_x, mean_y,
+            mean_x,
+            mean_y,
             color="white",
             edgecolor="red",
             s=150,
             linewidths=2.5,
-            zorder=5
+            zorder=5,
         )
 
     cbar = fig.colorbar(mappable, ax=axes, location="right", pad=0.02)
@@ -269,8 +294,11 @@ def plot_heatmaps(points_list, title, page):
     fig.suptitle(f"{title} | {page} Page", fontsize=16, fontweight="bold")
     return fig
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Generate event heatmaps from JSON session data.")
+    parser = argparse.ArgumentParser(
+        description="Generate event heatmaps from JSON session data."
+    )
     parser.add_argument(
         "--event",
         choices=["mouse", "click"],
@@ -302,6 +330,7 @@ def main():
 
     plot_heatmaps(points_list, title, page_name)
     plt.show()
+
 
 if __name__ == "__main__":
     main()

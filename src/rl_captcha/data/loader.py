@@ -12,7 +12,6 @@ import mysql.connector
 
 from rl_captcha.config import DBConfig
 
-
 # ---------------------------------------------------------------------------
 # Bot type → adversarial tier mapping
 # ---------------------------------------------------------------------------
@@ -83,6 +82,7 @@ class Session:
 # MySQL loader (reads the webapp's user_sessions table directly)
 # ---------------------------------------------------------------------------
 
+
 def load_from_mysql(
     config: DBConfig | None = None,
     limit: int = 10_000,
@@ -143,6 +143,7 @@ def load_from_mysql(
 # Webapp CSV export loader
 # ---------------------------------------------------------------------------
 
+
 def load_from_csv(
     path: str | Path,
     label: int | None = 1,
@@ -174,6 +175,7 @@ def load_from_csv(
 # ---------------------------------------------------------------------------
 # Directory-based loaders (data/human/ and data/bot/)
 # ---------------------------------------------------------------------------
+
 
 def load_from_directory(
     data_dir: str | Path,
@@ -235,7 +237,9 @@ def load_from_directory(
             print(f"  Loaded {aug_count} augmented bot files from {aug_dir}/")
         else:
             print(f"  WARNING: --adversarial-augment is on but {aug_dir}/ not found.")
-            print(f"  Run: python -m rl_captcha.scripts.generate_augmented_data --data-dir {data_dir}")
+            print(
+                f"  Run: python -m rl_captcha.scripts.generate_augmented_data --data-dir {data_dir}"
+            )
 
     return sessions
 
@@ -257,15 +261,17 @@ def _load_flexible_json(path: Path, label: int) -> list[Session]:
             item_meta.setdefault("source_file", str(path.name))
             item_meta.setdefault("bot_type", item.get("bot_type"))
             item_meta.setdefault("tier", item.get("tier"))
-            sessions.append(Session(
-                session_id=sid,
-                label=item.get("label", label),
-                mouse=_ensure_list(item.get("mouse")),
-                clicks=_ensure_list(item.get("clicks")),
-                keystrokes=_ensure_list(item.get("keystrokes")),
-                scroll=_ensure_list(item.get("scroll")),
-                metadata=item_meta,
-            ))
+            sessions.append(
+                Session(
+                    session_id=sid,
+                    label=item.get("label", label),
+                    mouse=_ensure_list(item.get("mouse")),
+                    clicks=_ensure_list(item.get("clicks")),
+                    keystrokes=_ensure_list(item.get("keystrokes")),
+                    scroll=_ensure_list(item.get("scroll")),
+                    metadata=item_meta,
+                )
+            )
     elif isinstance(data, dict):
         if "segments" in data and isinstance(data.get("segments"), list):
             # Live-confirm / webapp export format:
@@ -277,20 +283,22 @@ def _load_flexible_json(path: Path, label: int) -> list[Session]:
                 clicks.extend(seg.get("clicks", []))
                 keystrokes.extend(seg.get("keystrokes", []))
                 scroll.extend(seg.get("scroll", []))
-            sessions.append(Session(
-                session_id=sid,
-                label=data.get("label", label),
-                mouse=mouse,
-                clicks=clicks,
-                keystrokes=keystrokes,
-                scroll=scroll,
-                metadata={
-                    "source": data.get("source", "live_confirm"),
-                    "source_file": str(path.name),
-                    "bot_type": data.get("bot_type"),
-                    "tier": data.get("tier"),
-                },
-            ))
+            sessions.append(
+                Session(
+                    session_id=sid,
+                    label=data.get("label", label),
+                    mouse=mouse,
+                    clicks=clicks,
+                    keystrokes=keystrokes,
+                    scroll=scroll,
+                    metadata={
+                        "source": data.get("source", "live_confirm"),
+                        "source_file": str(path.name),
+                        "bot_type": data.get("bot_type"),
+                        "tier": data.get("tier"),
+                    },
+                )
+            )
         else:
             # Single flat session object
             sid = data.get("session_id", data.get("sessionId", path.stem))
@@ -300,15 +308,17 @@ def _load_flexible_json(path: Path, label: int) -> list[Session]:
             raw_meta.setdefault("source_file", str(path.name))
             raw_meta.setdefault("bot_type", data.get("bot_type"))
             raw_meta.setdefault("tier", data.get("tier"))
-            sessions.append(Session(
-                session_id=sid,
-                label=data.get("label", label),
-                mouse=_ensure_list(data.get("mouse")),
-                clicks=_ensure_list(data.get("clicks")),
-                keystrokes=_ensure_list(data.get("keystrokes")),
-                scroll=_ensure_list(data.get("scroll")),
-                metadata=raw_meta,
-            ))
+            sessions.append(
+                Session(
+                    session_id=sid,
+                    label=data.get("label", label),
+                    mouse=_ensure_list(data.get("mouse")),
+                    clicks=_ensure_list(data.get("clicks")),
+                    keystrokes=_ensure_list(data.get("keystrokes")),
+                    scroll=_ensure_list(data.get("scroll")),
+                    metadata=raw_meta,
+                )
+            )
 
     return sessions
 
@@ -316,6 +326,7 @@ def _load_flexible_json(path: Path, label: int) -> list[Session]:
 # ---------------------------------------------------------------------------
 # Session slicing (for windowed feature extraction)
 # ---------------------------------------------------------------------------
+
 
 def slice_session(
     session: Session,
@@ -329,6 +340,7 @@ def slice_session(
     even if the 'up' timestamp exceeds t_end by up to *keystroke_up_extend_ms*.
     This prevents orphaned key-down events from losing their hold duration.
     """
+
     def _in_range(evt: dict) -> bool:
         t = evt.get("t", evt.get("timestamp", -1))
         return t_start <= t <= t_end
@@ -379,6 +391,7 @@ def slice_session(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _ensure_list(value: Any) -> list:
     """Coerce a value to a list."""
     if isinstance(value, list):
@@ -404,6 +417,7 @@ def _parse_json(value: Any) -> list | dict:
 # ---------------------------------------------------------------------------
 # Train / validation / test splitting
 # ---------------------------------------------------------------------------
+
 
 def split_sessions(
     sessions: list[Session],
@@ -433,7 +447,9 @@ def split_sessions(
     human = [s for s in originals if s.label == 1]
     bot = [s for s in originals if s.label == 0]
 
-    def _split_group(group: list[Session]) -> tuple[list[Session], list[Session], list[Session]]:
+    def _split_group(
+        group: list[Session],
+    ) -> tuple[list[Session], list[Session], list[Session]]:
         rng = _rng.Random(seed)
         shuffled = list(group)
         rng.shuffle(shuffled)
@@ -503,7 +519,11 @@ def split_sessions_by_family(
 
     # Split the seen sessions normally
     seen_train, seen_val, seen_test = split_sessions(
-        seen_sessions, train=train, val=val, test=test, seed=seed,
+        seen_sessions,
+        train=train,
+        val=val,
+        test=test,
+        seed=seed,
     )
 
     # Add held-out bots to test set only

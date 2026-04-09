@@ -62,22 +62,77 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "bot"
 
 # Bot type → adversarial tier (must match rl_captcha.data.loader.BOT_TYPE_TO_TIER)
 BOT_TIER: dict[str, int] = {
-    "linear": 1, "tabber": 1, "speedrun": 1,
-    "scripted": 2, "stealth": 2, "slow": 2, "erratic": 2, "replay": 2,
-    "semi_auto": 3, "trace_conditioned": 4,
+    "linear": 1,
+    "tabber": 1,
+    "speedrun": 1,
+    "scripted": 2,
+    "stealth": 2,
+    "slow": 2,
+    "erratic": 2,
+    "replay": 2,
+    "semi_auto": 3,
+    "trace_conditioned": 4,
     "llm": 5,
 }
 
 # Realistic fake identities for varied runs
 FAKE_PEOPLE = [
-    {"full_name": "Maria Gonzalez", "billing_address": "742 Evergreen Terrace", "city": "San Jose", "zip_code": "95112", "state": "California"},
-    {"full_name": "James Chen", "billing_address": "1600 Amphitheatre Pkwy", "city": "Mountain View", "zip_code": "94043", "state": "California"},
-    {"full_name": "Sarah Johnson", "billing_address": "350 Fifth Avenue", "city": "New York", "zip_code": "10118", "state": "New York"},
-    {"full_name": "David Kim", "billing_address": "233 S Wacker Dr", "city": "Chicago", "zip_code": "60606", "state": "Illinois"},
-    {"full_name": "Emily Davis", "billing_address": "600 Navarro St", "city": "San Antonio", "zip_code": "78205", "state": "Texas"},
-    {"full_name": "Michael Brown", "billing_address": "1 Infinite Loop", "city": "Cupertino", "zip_code": "95014", "state": "California"},
-    {"full_name": "Jessica Wilson", "billing_address": "100 Universal City Plz", "city": "Universal City", "zip_code": "91608", "state": "California"},
-    {"full_name": "Robert Martinez", "billing_address": "1901 Main St", "city": "Dallas", "zip_code": "75201", "state": "Texas"},
+    {
+        "full_name": "Maria Gonzalez",
+        "billing_address": "742 Evergreen Terrace",
+        "city": "San Jose",
+        "zip_code": "95112",
+        "state": "California",
+    },
+    {
+        "full_name": "James Chen",
+        "billing_address": "1600 Amphitheatre Pkwy",
+        "city": "Mountain View",
+        "zip_code": "94043",
+        "state": "California",
+    },
+    {
+        "full_name": "Sarah Johnson",
+        "billing_address": "350 Fifth Avenue",
+        "city": "New York",
+        "zip_code": "10118",
+        "state": "New York",
+    },
+    {
+        "full_name": "David Kim",
+        "billing_address": "233 S Wacker Dr",
+        "city": "Chicago",
+        "zip_code": "60606",
+        "state": "Illinois",
+    },
+    {
+        "full_name": "Emily Davis",
+        "billing_address": "600 Navarro St",
+        "city": "San Antonio",
+        "zip_code": "78205",
+        "state": "Texas",
+    },
+    {
+        "full_name": "Michael Brown",
+        "billing_address": "1 Infinite Loop",
+        "city": "Cupertino",
+        "zip_code": "95014",
+        "state": "California",
+    },
+    {
+        "full_name": "Jessica Wilson",
+        "billing_address": "100 Universal City Plz",
+        "city": "Universal City",
+        "zip_code": "91608",
+        "state": "California",
+    },
+    {
+        "full_name": "Robert Martinez",
+        "billing_address": "1901 Main St",
+        "city": "Dallas",
+        "zip_code": "75201",
+        "state": "Texas",
+    },
 ]
 
 CARD_NUMBERS = ["4111111111111111", "4242424242424242", "5500000000000004"]
@@ -124,9 +179,18 @@ def wait_for_url(driver, url_contains, timeout=10):
 # Human-like typing helpers
 # ---------------------------------------------------------------------------
 
-def _type_with_hold(driver, element, text, hold_min=0.04, hold_max=0.12,
-                     gap_min=0.03, gap_max=0.25, think_prob=0.08,
-                     think_range=(0.3, 0.8)):
+
+def _type_with_hold(
+    driver,
+    element,
+    text,
+    hold_min=0.04,
+    hold_max=0.12,
+    gap_min=0.03,
+    gap_max=0.25,
+    think_prob=0.08,
+    think_range=(0.3, 0.8),
+):
     """Type with realistic key hold durations using JS keydown/keyup events.
 
     Selenium's send_keys() fires keydown+keyup instantly (0ms hold time),
@@ -156,19 +220,27 @@ def _type_with_hold(driver, element, text, hold_min=0.04, hold_max=0.12,
             c = text[i + j]
             # Dispatch keydown, wait (hold), then keyup — tracking.js measures this gap
             hold_time = random.uniform(hold_min, hold_max)
-            driver.execute_script("""
+            driver.execute_script(
+                """
                 var el = arguments[0], key = arguments[1], holdMs = arguments[2];
                 el.dispatchEvent(new KeyboardEvent('keydown', {key: key, code: 'Key'+key.toUpperCase(), bubbles: true}));
                 // Update value to include new char (React controlled input)
                 var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
                 nativeSetter.call(el, el.value + key);
                 el.dispatchEvent(new Event('input', {bubbles: true}));
-            """, element, c)
+            """,
+                element,
+                c,
+            )
             time.sleep(hold_time)
-            driver.execute_script("""
+            driver.execute_script(
+                """
                 var el = arguments[0], key = arguments[1];
                 el.dispatchEvent(new KeyboardEvent('keyup', {key: key, code: 'Key'+key.toUpperCase(), bubbles: true}));
-            """, element, c)
+            """,
+                element,
+                c,
+            )
             # Fast within burst
             time.sleep(random.uniform(0.02, 0.06))
 
@@ -237,6 +309,7 @@ def _type_uniform(element, text):
 # Human-like mouse movement helpers
 # ---------------------------------------------------------------------------
 
+
 def _human_move_and_click(driver, element, click_only=False):
     """Move to element with natural-looking curve, micro-corrections, and click."""
     if click_only:
@@ -247,8 +320,8 @@ def _human_move_and_click(driver, element, click_only=False):
     # Get current mouse position (approximate via element location)
     loc = element.location
     size = element.size
-    target_x = loc['x'] + size['width'] / 2
-    target_y = loc['y'] + size['height'] / 2
+    target_x = loc["x"] + size["width"] / 2
+    target_y = loc["y"] + size["height"] / 2
 
     # Multi-step approach with Bezier-like curve
     steps = random.randint(10, 25)
@@ -394,7 +467,9 @@ def _idle_fidget(driver, duration: float = None):
             arc_steps = random.randint(4, 8)
             start_angle = random.uniform(0, 2 * math.pi)
             for i in range(arc_steps):
-                angle = start_angle + (i / arc_steps) * math.pi * random.uniform(0.5, 1.5)
+                angle = start_angle + (i / arc_steps) * math.pi * random.uniform(
+                    0.5, 1.5
+                )
                 dx = int(radius * math.cos(angle) / arc_steps * 2)
                 dy = int(radius * math.sin(angle) / arc_steps * 2)
                 if dx != 0 or dy != 0:
@@ -440,10 +515,16 @@ def _page_sweep(driver):
             t_eased = t * t * (3 - 2 * t)
             remaining = 1 - t_eased
 
-            dx = int(target_x / steps + curve_x * remaining * math.sin(t * math.pi) / steps
-                     + random.gauss(0, 3))
-            dy = int(target_y / steps + curve_y * remaining * math.sin(t * math.pi) / steps
-                     + random.gauss(0, 2))
+            dx = int(
+                target_x / steps
+                + curve_x * remaining * math.sin(t * math.pi) / steps
+                + random.gauss(0, 3)
+            )
+            dy = int(
+                target_y / steps
+                + curve_y * remaining * math.sin(t * math.pi) / steps
+                + random.gauss(0, 2)
+            )
             if dx != 0 or dy != 0:
                 actions.move_by_offset(dx, dy)
             actions.pause(_varied_pause(0.015, spread=2.5))
@@ -471,7 +552,9 @@ def _wander_mouse(driver, duration=None):
     while elapsed < duration:
         actions = ActionChains(driver)
         # Pick a random movement style
-        style = random.choices(["sweep", "drift", "read_scan"], weights=[0.3, 0.4, 0.3])[0]
+        style = random.choices(
+            ["sweep", "drift", "read_scan"], weights=[0.3, 0.4, 0.3]
+        )[0]
 
         if style == "sweep":
             # Broad sweep across page (like scanning a section)
@@ -535,9 +618,17 @@ def _random_page_click(driver, count=1):
     # Target safe non-interactive elements to avoid accidentally clicking
     # stepper buttons, disabled buttons, or form controls.
     safe_selectors = [
-        "h1", "h2", "h3", "p", "header", ".logo",
-        ".ss-panel-header", ".ss-legend", ".ss-event-bar",
-        ".ss-stadium-note", ".ss-stage",
+        "h1",
+        "h2",
+        "h3",
+        "p",
+        "header",
+        ".logo",
+        ".ss-panel-header",
+        ".ss-legend",
+        ".ss-event-bar",
+        ".ss-stadium-note",
+        ".ss-stage",
     ]
     for _ in range(count):
         try:
@@ -553,7 +644,9 @@ def _random_page_click(driver, count=1):
                 body = driver.find_element(By.TAG_NAME, "body")
                 x_off = random.randint(-400, 400)
                 y_off = random.randint(-200, 200)
-                ActionChains(driver).move_to_element_with_offset(body, x_off, y_off).click().perform()
+                ActionChains(driver).move_to_element_with_offset(
+                    body, x_off, y_off
+                ).click().perform()
             time.sleep(random.uniform(0.1, 0.3))
         except Exception:
             pass
@@ -561,13 +654,16 @@ def _random_page_click(driver, count=1):
 
 def _dispatch_wheel(driver, dy: int):
     """Scroll by dispatching a real WheelEvent so tracking.js captures it."""
-    driver.execute_script("""
+    driver.execute_script(
+        """
         var dy = arguments[0];
         window.dispatchEvent(new WheelEvent('wheel', {
             deltaY: dy, deltaMode: 0, bubbles: true, cancelable: true
         }));
         window.scrollBy(0, dy);
-    """, dy)
+    """,
+        dy,
+    )
 
 
 def _random_scroll(driver, scrolls: int = 2):
@@ -603,6 +699,7 @@ def _human_scroll(driver, scrolls: int = 3):
 # ---------------------------------------------------------------------------
 # Shared multi-page flow steps
 # ---------------------------------------------------------------------------
+
 
 def _go_home(driver):
     """Navigate to the home page and wait for concert cards to load.
@@ -679,7 +776,9 @@ def _pick_section(driver, move_fn):
             minus_btn, plus_btn = btns[0], btns[1]
 
             # Add 1-4 tickets (weighted toward 1-2 like a real person)
-            num_tickets = random.choices([1, 2, 3, 4], weights=[0.35, 0.35, 0.20, 0.10])[0]
+            num_tickets = random.choices(
+                [1, 2, 3, 4], weights=[0.35, 0.35, 0.20, 0.10]
+            )[0]
             for i in range(num_tickets):
                 move_fn(driver, plus_btn)
                 # Slightly longer pause on first click (deciding), shorter after
@@ -742,7 +841,9 @@ def _handle_challenge(driver, move_fn, max_retries=3):
 
         # Try the "Go Back" button (blocked state)
         try:
-            go_back = driver.find_elements(By.CSS_SELECTOR, ".challenge-overlay .challenge-btn")
+            go_back = driver.find_elements(
+                By.CSS_SELECTOR, ".challenge-overlay .challenge-btn"
+            )
             if go_back:
                 btn_text = go_back[0].text.strip().lower()
                 if btn_text == "go back":
@@ -761,12 +862,13 @@ def _handle_challenge(driver, move_fn, max_retries=3):
                 track = slider_thumb[0]
                 track_size = track.size
                 # Click somewhere on the track (random position — will probably miss)
-                ActionChains(driver) \
-                    .move_to_element_with_offset(track, int(track_size['width'] * random.uniform(0.2, 0.8)), int(track_size['height'] / 2)) \
-                    .click_and_hold() \
-                    .move_by_offset(int(track_size['width'] * random.uniform(-0.3, 0.3)), 0) \
-                    .release() \
-                    .perform()
+                ActionChains(driver).move_to_element_with_offset(
+                    track,
+                    int(track_size["width"] * random.uniform(0.2, 0.8)),
+                    int(track_size["height"] / 2),
+                ).click_and_hold().move_by_offset(
+                    int(track_size["width"] * random.uniform(-0.3, 0.3)), 0
+                ).release().perform()
                 time.sleep(1)
             except Exception as e:
                 print(f"  Slider attempt failed: {e}")
@@ -780,9 +882,11 @@ def _handle_challenge(driver, move_fn, max_retries=3):
                 inp = captcha_input[0]
                 inp.clear()
                 # Type a random guess
-                guess = ''.join(random.choices('ABCDEFGHJKMNPQRSTUVWXYZ23456789', k=5))
+                guess = "".join(random.choices("ABCDEFGHJKMNPQRSTUVWXYZ23456789", k=5))
                 inp.send_keys(guess)
-                submit_btn = driver.find_elements(By.CSS_SELECTOR, ".captcha-form .challenge-btn")
+                submit_btn = driver.find_elements(
+                    By.CSS_SELECTOR, ".captcha-form .challenge-btn"
+                )
                 if submit_btn:
                     submit_btn[0].click()
                 time.sleep(1)
@@ -799,19 +903,20 @@ def _handle_challenge(driver, move_fn, max_retries=3):
                 canvas_size = canvas.size
                 # Click 4 random spots on the canvas (will almost certainly fail)
                 for _ in range(4):
-                    x_off = int(canvas_size['width'] * random.uniform(0.1, 0.9))
-                    y_off = int(canvas_size['height'] * random.uniform(0.1, 0.9))
-                    ActionChains(driver) \
-                        .move_to_element_with_offset(canvas, x_off, y_off) \
-                        .click() \
-                        .perform()
+                    x_off = int(canvas_size["width"] * random.uniform(0.1, 0.9))
+                    y_off = int(canvas_size["height"] * random.uniform(0.1, 0.9))
+                    ActionChains(driver).move_to_element_with_offset(
+                        canvas, x_off, y_off
+                    ).click().perform()
                     time.sleep(random.uniform(0.3, 0.8))
                 time.sleep(2)
             except Exception as e:
                 print(f"  Timed click attempt failed: {e}")
 
             # Check for "Try Again" button
-            retry_btns = driver.find_elements(By.CSS_SELECTOR, ".challenge-overlay .challenge-btn")
+            retry_btns = driver.find_elements(
+                By.CSS_SELECTOR, ".challenge-overlay .challenge-btn"
+            )
             for btn in retry_btns:
                 if "try again" in btn.text.strip().lower():
                     print("  Clicking 'Try Again'...")
@@ -821,7 +926,9 @@ def _handle_challenge(driver, move_fn, max_retries=3):
             continue
 
         # Generic fallback: click any visible challenge button
-        buttons = driver.find_elements(By.CSS_SELECTOR, ".challenge-overlay .challenge-btn")
+        buttons = driver.find_elements(
+            By.CSS_SELECTOR, ".challenge-overlay .challenge-btn"
+        )
         for btn in buttons:
             try:
                 btn.click()
@@ -865,12 +972,20 @@ def _fill_checkout(driver, type_fn, move_fn, skip_honeypot=False):
 
     # Generic filler for unknown fields (bot doesn't know what they are)
     GENERIC_FILLERS = [
-        "test@email.com", "5551234567", "John Doe", "123 Main St",
-        "Springfield", "12345", "some value",
+        "test@email.com",
+        "5551234567",
+        "John Doe",
+        "123 Main St",
+        "Springfield",
+        "12345",
+        "some value",
     ]
 
     # Discover ALL input fields on the page and fill them
-    all_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input[type='tel'], input[type='email'], input:not([type])")
+    all_inputs = driver.find_elements(
+        By.CSS_SELECTOR,
+        "input[type='text'], input[type='tel'], input[type='email'], input:not([type])",
+    )
     filler_idx = 0
 
     for i, inp in enumerate(all_inputs):
@@ -898,7 +1013,8 @@ def _fill_checkout(driver, type_fn, move_fn, skip_honeypot=False):
             # (off-screen, hidden), use JS to set value and dispatch events
             # WITHOUT unhiding — keeps the field invisible on screen
             if not inp.is_displayed():
-                driver.execute_script("""
+                driver.execute_script(
+                    """
                     var el = arguments[0];
                     var value = arguments[1];
                     // Set value via React's value setter to trigger onChange
@@ -918,7 +1034,10 @@ def _fill_checkout(driver, type_fn, move_fn, skip_honeypot=False):
                             bubbles: true
                         }));
                     }
-                """, inp, value)
+                """,
+                    inp,
+                    value,
+                )
             else:
                 move_fn(driver, inp, click_only=True)
                 type_fn(inp, value)
@@ -931,11 +1050,18 @@ def _fill_checkout(driver, type_fn, move_fn, skip_honeypot=False):
         except StaleElementReferenceException:
             # Re-find input fields and retry this one
             try:
-                refreshed = driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input[type='tel'], input[type='email'], input:not([type])")
+                refreshed = driver.find_elements(
+                    By.CSS_SELECTOR,
+                    "input[type='text'], input[type='tel'], input[type='email'], input:not([type])",
+                )
                 if i < len(refreshed):
                     inp = refreshed[i]
-                    field_id = inp.get_attribute("id") or inp.get_attribute("name") or ""
-                    value = known_values.get(field_id, GENERIC_FILLERS[filler_idx % len(GENERIC_FILLERS)])
+                    field_id = (
+                        inp.get_attribute("id") or inp.get_attribute("name") or ""
+                    )
+                    value = known_values.get(
+                        field_id, GENERIC_FILLERS[filler_idx % len(GENERIC_FILLERS)]
+                    )
                     if value and inp.is_displayed():
                         move_fn(driver, inp, click_only=True)
                         type_fn(inp, value)
@@ -1034,11 +1160,18 @@ def _fill_checkout_targeted(driver, type_fn, move_fn, skip_honeypot=False):
     # If NOT skipping honeypot, also fill any unknown visible fields
     # (dumb bots still fill everything they find)
     if not skip_honeypot:
-        all_inputs = driver.find_elements(By.CSS_SELECTOR,
-            "input[type='text'], input[type='tel'], input[type='email'], input:not([type])")
+        all_inputs = driver.find_elements(
+            By.CSS_SELECTOR,
+            "input[type='text'], input[type='tel'], input[type='email'], input:not([type])",
+        )
         GENERIC_FILLERS = [
-            "test@email.com", "5551234567", "John Doe", "123 Main St",
-            "Springfield", "12345", "some value",
+            "test@email.com",
+            "5551234567",
+            "John Doe",
+            "123 Main St",
+            "Springfield",
+            "12345",
+            "some value",
         ]
         filler_idx = 0
         for inp in all_inputs:
@@ -1053,14 +1186,18 @@ def _fill_checkout_targeted(driver, type_fn, move_fn, skip_honeypot=False):
                     type_fn(inp, value)
                 else:
                     # Hidden field — fill via JS (honeypot trap)
-                    driver.execute_script("""
+                    driver.execute_script(
+                        """
                         var el = arguments[0], value = arguments[1];
                         var setter = Object.getOwnPropertyDescriptor(
                             window.HTMLInputElement.prototype, 'value').set;
                         setter.call(el, value);
                         el.dispatchEvent(new Event('input', {bubbles: true}));
                         el.dispatchEvent(new Event('change', {bubbles: true}));
-                    """, inp, value)
+                    """,
+                        inp,
+                        value,
+                    )
                 time.sleep(random.uniform(0.1, 0.3))
             except Exception:
                 pass
@@ -1097,6 +1234,7 @@ def _fill_checkout_targeted(driver, type_fn, move_fn, skip_honeypot=False):
 # Bot behaviors
 # ---------------------------------------------------------------------------
 
+
 def linear_bot(driver, skip_honeypot=False):
     """Straight-line mouse, uniform typing with slight variance.
     Obviously robotic — easy negative for the RL agent."""
@@ -1118,7 +1256,9 @@ def linear_bot(driver, skip_honeypot=False):
     _random_page_click(driver, random.randint(0, 1))
     time.sleep(random.uniform(0.1, 0.3))
 
-    return _fill_checkout(driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout(
+        driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot
+    )
 
 
 def scripted_bot(driver, skip_honeypot=False):
@@ -1148,11 +1288,17 @@ def scripted_bot(driver, skip_honeypot=False):
 
     # Use key-hold typing for ~50% of scripted bots
     if random.random() < 0.5:
+
         def _type_scripted(element, text):
             _type_with_hold(driver, element, text)
-        return _fill_checkout_targeted(driver, _type_scripted, _human_move_and_click, skip_honeypot=skip_honeypot)
 
-    return _fill_checkout_targeted(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+        return _fill_checkout_targeted(
+            driver, _type_scripted, _human_move_and_click, skip_honeypot=skip_honeypot
+        )
+
+    return _fill_checkout_targeted(
+        driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot
+    )
 
 
 def tabber_bot(driver, skip_honeypot=False):
@@ -1200,7 +1346,9 @@ def tabber_bot(driver, skip_honeypot=False):
             return
 
     time.sleep(random.uniform(0.5, 1.0))
-    return _fill_checkout(driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout(
+        driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot
+    )
 
 
 def slow_bot(driver, skip_honeypot=False):
@@ -1228,7 +1376,9 @@ def slow_bot(driver, skip_honeypot=False):
     _wander_mouse(driver, random.uniform(0.3, 0.8))
     time.sleep(random.uniform(0.5, 1.0))
 
-    return _fill_checkout_targeted(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout_targeted(
+        driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot
+    )
 
 
 def erratic_bot(driver, skip_honeypot=False):
@@ -1270,7 +1420,9 @@ def erratic_bot(driver, skip_honeypot=False):
 
     # Erratic checkout — fidget excessively between fields
     _random_page_click(driver, random.randint(1, 2))
-    return _fill_checkout_targeted(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout_targeted(
+        driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot
+    )
 
 
 def speedrun_bot(driver, skip_honeypot=False):
@@ -1306,12 +1458,19 @@ def speedrun_bot(driver, skip_honeypot=False):
     }
 
     GENERIC_FILLERS = [
-        "test@email.com", "5551234567", "John Doe", "123 Main St",
-        "Springfield", "12345", "some value",
+        "test@email.com",
+        "5551234567",
+        "John Doe",
+        "123 Main St",
+        "Springfield",
+        "12345",
+        "some value",
     ]
 
-    all_inputs = driver.find_elements(By.CSS_SELECTOR,
-        "input[type='text'], input[type='tel'], input[type='email'], input:not([type])")
+    all_inputs = driver.find_elements(
+        By.CSS_SELECTOR,
+        "input[type='text'], input[type='tel'], input[type='email'], input:not([type])",
+    )
     filler_idx = 0
 
     for inp in all_inputs:
@@ -1329,14 +1488,18 @@ def speedrun_bot(driver, skip_honeypot=False):
                 continue
 
             if not inp.is_displayed():
-                driver.execute_script("""
+                driver.execute_script(
+                    """
                     var el = arguments[0]; var value = arguments[1];
                     var setter = Object.getOwnPropertyDescriptor(
                         window.HTMLInputElement.prototype, 'value').set;
                     setter.call(el, value);
                     el.dispatchEvent(new Event('input', { bubbles: true }));
                     el.dispatchEvent(new Event('change', { bubbles: true }));
-                """, inp, value)
+                """,
+                    inp,
+                    value,
+                )
             else:
                 inp.click()
                 # Blast all chars at once — inhuman speed
@@ -1475,27 +1638,30 @@ def _load_human_timing_profiles() -> list[dict]:
         )
         duration = max(all_times) - min(all_times) if all_times else 0
 
-        profiles.append({
-            "mouse_intervals": mouse_intervals,
-            "click_intervals": click_intervals,
-            "key_intervals": key_intervals,
-            "scroll_deltas": scroll_deltas,
-            "scroll_intervals": scroll_intervals,
-            "duration": duration,
-            "event_counts": {
-                "mouse": len(all_mouse),
-                "clicks": len(all_clicks),
-                "keys": len(all_keys),
-                "scroll": len(all_scroll),
-            },
-        })
+        profiles.append(
+            {
+                "mouse_intervals": mouse_intervals,
+                "click_intervals": click_intervals,
+                "key_intervals": key_intervals,
+                "scroll_deltas": scroll_deltas,
+                "scroll_intervals": scroll_intervals,
+                "duration": duration,
+                "event_counts": {
+                    "mouse": len(all_mouse),
+                    "clicks": len(all_clicks),
+                    "keys": len(all_keys),
+                    "scroll": len(all_scroll),
+                },
+            }
+        )
 
     _cached_human_profiles = profiles
     return profiles
 
 
-def _sample_from_human(intervals: list[float], fallback_min: float = 50,
-                       fallback_max: float = 300) -> float:
+def _sample_from_human(
+    intervals: list[float], fallback_min: float = 50, fallback_max: float = 300
+) -> float:
     """Sample a timing value from real human intervals with noise.
 
     Picks a random value from the list, adds Gaussian jitter (±20%),
@@ -1579,9 +1745,15 @@ def stealth_bot(driver, skip_honeypot=False):
 
     def _type_stealth(element, text):
         """Type with realistic key hold times using JS events."""
-        _type_with_hold(driver, element, text,
-                        hold_min=hold_min, hold_max=hold_max,
-                        think_prob=think_prob, think_range=think_range)
+        _type_with_hold(
+            driver,
+            element,
+            text,
+            hold_min=hold_min,
+            hold_max=hold_max,
+            think_prob=think_prob,
+            think_range=think_range,
+        )
 
     fidget_prob = 0.5 if indecisive else 0.3
 
@@ -1594,8 +1766,9 @@ def stealth_bot(driver, skip_honeypot=False):
             _idle_fidget(driver_arg, random.uniform(0.1, 0.3))
         _human_move_and_click(driver_arg, element, click_only=click_only)
 
-    return _fill_checkout_targeted(driver, _type_stealth, _stealth_move_and_click,
-                                   skip_honeypot=skip_honeypot)
+    return _fill_checkout_targeted(
+        driver, _type_stealth, _stealth_move_and_click, skip_honeypot=skip_honeypot
+    )
 
 
 def replay_bot(driver, source_path: str, skip_honeypot=False):
@@ -1634,7 +1807,9 @@ def replay_bot(driver, source_path: str, skip_honeypot=False):
     _replay_scroll(driver, seg.get("scroll", []), max_events=5)
     time.sleep(random.uniform(0.2, 0.5))
 
-    return _fill_checkout_targeted(driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot)
+    return _fill_checkout_targeted(
+        driver, _type_human, _human_move_and_click, skip_honeypot=skip_honeypot
+    )
 
 
 def semi_auto_bot(driver, skip_honeypot=False):
@@ -1651,8 +1826,10 @@ def semi_auto_bot(driver, skip_honeypot=False):
       B) Human browses → bot does checkout    (less common)
       C) Bot navigates & selects → human fills payment only
     """
-    strategy = random.choices(["bot_then_human", "human_then_bot", "split_checkout"],
-                              weights=[0.50, 0.25, 0.25])[0]
+    strategy = random.choices(
+        ["bot_then_human", "human_then_bot", "split_checkout"],
+        weights=[0.50, 0.25, 0.25],
+    )[0]
     print(f"  Semi-auto strategy: {strategy}")
 
     if strategy == "bot_then_human":
@@ -1675,12 +1852,19 @@ def semi_auto_bot(driver, skip_honeypot=False):
         _idle_fidget(driver, random.uniform(0.3, 0.8))
 
         def _type_careful(element, text):
-            _type_with_hold(driver, element, text,
-                            hold_min=0.05, hold_max=0.15,
-                            think_prob=0.10, think_range=(0.3, 1.0))
+            _type_with_hold(
+                driver,
+                element,
+                text,
+                hold_min=0.05,
+                hold_max=0.15,
+                think_prob=0.10,
+                think_range=(0.3, 1.0),
+            )
 
-        return _fill_checkout_targeted(driver, _type_careful, _human_move_and_click,
-                                       skip_honeypot=skip_honeypot)
+        return _fill_checkout_targeted(
+            driver, _type_careful, _human_move_and_click, skip_honeypot=skip_honeypot
+        )
 
     elif strategy == "human_then_bot":
         # ── HUMAN phase: browsing and exploring ──
@@ -1702,8 +1886,9 @@ def semi_auto_bot(driver, skip_honeypot=False):
 
         # ── BOT phase: fast checkout ──
         time.sleep(random.uniform(0.1, 0.3))
-        return _fill_checkout_targeted(driver, _type_uniform, _linear_move_and_click,
-                                       skip_honeypot=skip_honeypot)
+        return _fill_checkout_targeted(
+            driver, _type_uniform, _linear_move_and_click, skip_honeypot=skip_honeypot
+        )
 
     else:  # split_checkout
         # ── BOT phase: navigate + select ──
@@ -1751,9 +1936,15 @@ def semi_auto_bot(driver, skip_honeypot=False):
             try:
                 el = driver.find_element(By.ID, fid)
                 _human_move_and_click(driver, el)
-                _type_with_hold(driver, el, val,
-                                hold_min=0.05, hold_max=0.14,
-                                think_prob=0.08, think_range=(0.2, 0.6))
+                _type_with_hold(
+                    driver,
+                    el,
+                    val,
+                    hold_min=0.05,
+                    hold_max=0.14,
+                    think_prob=0.08,
+                    think_range=(0.2, 0.6),
+                )
                 time.sleep(random.uniform(0.1, 0.3))
             except Exception:
                 pass
@@ -1781,7 +1972,9 @@ def trace_conditioned_bot(driver, skip_honeypot=False):
     human sessions, making it the hardest scripted bot to detect.
     """
     # Load both human segments (for mouse/scroll replay) and timing profiles
-    human_files = sorted(HUMAN_DATA_DIR.glob("*.json")) if HUMAN_DATA_DIR.exists() else []
+    human_files = (
+        sorted(HUMAN_DATA_DIR.glob("*.json")) if HUMAN_DATA_DIR.exists() else []
+    )
     if not human_files:
         print("  WARNING: No human data — falling back to stealth_bot")
         return stealth_bot(driver, skip_honeypot=skip_honeypot)
@@ -1828,9 +2021,15 @@ def trace_conditioned_bot(driver, skip_honeypot=False):
 
     # Type using human-sampled intervals with key hold
     def _type_trace_conditioned(element, text):
-        _type_with_hold(driver, element, text,
-                        hold_min=0.04, hold_max=0.13,
-                        think_prob=0.08, think_range=(0.2, 0.7))
+        _type_with_hold(
+            driver,
+            element,
+            text,
+            hold_min=0.04,
+            hold_max=0.13,
+            think_prob=0.08,
+            think_range=(0.2, 0.7),
+        )
         # Occasionally add a human-profiled pause between fields
         if key_intervals and random.random() < 0.3:
             pause = _sample_from_human(key_intervals, 80, 400)
@@ -1847,14 +2046,18 @@ def trace_conditioned_bot(driver, skip_honeypot=False):
             pause = _sample_from_human(click_intervals, 200, 1500)
             time.sleep(min(pause, 1.5))
 
-    return _fill_checkout_targeted(driver, _type_trace_conditioned,
-                                   _trace_move_and_click,
-                                   skip_honeypot=skip_honeypot)
+    return _fill_checkout_targeted(
+        driver,
+        _type_trace_conditioned,
+        _trace_move_and_click,
+        skip_honeypot=skip_honeypot,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Replay helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_replay_segments(source_path: str) -> list[dict]:
     """Load segments from a session JSON file (live-confirm format)."""
@@ -1896,8 +2099,7 @@ def _replay_mouse(driver, mouse_events: list[dict], max_events: int = 100):
     src_h = max(src_max_y - src_min_y, 1)
 
     # Scale to fit within viewport
-    scale = min((vp_w - 2 * margin) / src_w,
-                (vp_h - 2 * margin) / src_h, 1.0)
+    scale = min((vp_w - 2 * margin) / src_w, (vp_h - 2 * margin) / src_h, 1.0)
 
     prev_t = 0
     for evt in events:
@@ -1916,7 +2118,8 @@ def _replay_mouse(driver, mouse_events: list[dict], max_events: int = 100):
             "document.elementFromPoint(arguments[0],arguments[1])"
             "?.dispatchEvent(new MouseEvent('mousemove',{clientX:arguments[0],"
             "clientY:arguments[1],bubbles:true}));",
-            nx, ny,
+            nx,
+            ny,
         )
 
         dt = (t - prev_t) / 1000 if prev_t else 0.015
@@ -1946,6 +2149,7 @@ def _replay_scroll(driver, scroll_events: list[dict], max_events: int = 10):
 # Auto-export and RL confirmation
 # ---------------------------------------------------------------------------
 
+
 def _get_session_id(driver) -> str | None:
     """Read the tracking session ID from the browser's sessionStorage."""
     try:
@@ -1956,8 +2160,9 @@ def _get_session_id(driver) -> str | None:
         return None
 
 
-def _export_and_confirm(driver, run_index: int, session_id: str | None = None,
-                        bot_type: str = "unknown") -> None:
+def _export_and_confirm(
+    driver, run_index: int, session_id: str | None = None, bot_type: str = "unknown"
+) -> None:
     """Pull telemetry from backend, save to data/bot/, confirm as bot."""
     import urllib.request
 
@@ -1997,8 +2202,10 @@ def _export_and_confirm(driver, run_index: int, session_id: str | None = None,
         print("  WARNING: 0 events captured")
         return
 
-    print(f"  Events: {len(mouse)} mouse, {len(clicks)} clicks, "
-          f"{len(keystrokes)} keystrokes, {len(scroll)} scroll")
+    print(
+        f"  Events: {len(mouse)} mouse, {len(clicks)} clicks, "
+        f"{len(keystrokes)} keystrokes, {len(scroll)} scroll"
+    )
 
     # Save JSON — use the same live_confirm format as human sessions
     # so the export structure itself doesn't leak the label.
@@ -2014,10 +2221,14 @@ def _export_and_confirm(driver, run_index: int, session_id: str | None = None,
         "source": "live_confirm",
         "bot_type": bot_type,
         "tier": BOT_TIER.get(bot_type, 0),
-        "segments": [{
-            "mouse": mouse, "clicks": clicks,
-            "keystrokes": keystrokes, "scroll": scroll,
-        }],
+        "segments": [
+            {
+                "mouse": mouse,
+                "clicks": clicks,
+                "keystrokes": keystrokes,
+                "scroll": scroll,
+            }
+        ],
     }
     with open(out_path, "w") as f:
         json.dump(consolidated, f, indent=2)
@@ -2028,13 +2239,17 @@ def _export_and_confirm(driver, run_index: int, session_id: str | None = None,
     try:
         body = json.dumps({"session_id": session_id, "true_label": 0}).encode()
         req = urllib.request.Request(
-            f"{API_URL}/api/agent/confirm", data=body,
-            headers={"Content-Type": "application/json"})
+            f"{API_URL}/api/agent/confirm",
+            data=body,
+            headers={"Content-Type": "application/json"},
+        )
         with urllib.request.urlopen(req, timeout=120) as resp:
             result = json.loads(resp.read().decode())
         if result.get("updated"):
             metrics = result.get("metrics", {})
-            print(f"  RL agent updated! (loss: {metrics.get('policy_loss', '?')}, steps: {result.get('steps', '?')})")
+            print(
+                f"  RL agent updated! (loss: {metrics.get('policy_loss', '?')}, steps: {result.get('steps', '?')})"
+            )
         else:
             print(f"  RL confirmed (no update: {result.get('reason', '?')})")
     except Exception as e:
@@ -2045,16 +2260,36 @@ def _export_and_confirm(driver, run_index: int, session_id: str | None = None,
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(description="Run bot against TicketMonarch")
     parser.add_argument("--runs", type=int, default=3, help="Number of bot sessions")
-    parser.add_argument("--type", choices=[
-        "linear", "scripted", "replay", "tabber", "slow", "erratic",
-        "speedrun", "stealth", "semi_auto", "trace_conditioned", "mixed",
-    ], default="scripted")
+    parser.add_argument(
+        "--type",
+        choices=[
+            "linear",
+            "scripted",
+            "replay",
+            "tabber",
+            "slow",
+            "erratic",
+            "speedrun",
+            "stealth",
+            "semi_auto",
+            "trace_conditioned",
+            "mixed",
+        ],
+        default="scripted",
+    )
     parser.add_argument("--replay-source", type=str, help="JSON file for replay bot")
-    parser.add_argument("--pause-between", type=float, default=2.0, help="Seconds between runs")
-    parser.add_argument("--skip-honeypot", action="store_true", help="Skip unknown form fields (avoids honeypot traps)")
+    parser.add_argument(
+        "--pause-between", type=float, default=2.0, help="Seconds between runs"
+    )
+    parser.add_argument(
+        "--skip-honeypot",
+        action="store_true",
+        help="Skip unknown form fields (avoids honeypot traps)",
+    )
     args = parser.parse_args()
 
     print(f"Selenium Bot — {args.runs} {args.type} runs")
@@ -2077,10 +2312,18 @@ def main():
                 if bot_type == "mixed":
                     # Diverse mix across all tiers
                     bot_type = random.choices(
-                        ["linear", "scripted", "tabber", "slow", "erratic",
-                         "speedrun", "stealth", "semi_auto", "trace_conditioned"],
-                        weights=[0.06, 0.18, 0.04, 0.10, 0.05,
-                                 0.04, 0.25, 0.15, 0.13],
+                        [
+                            "linear",
+                            "scripted",
+                            "tabber",
+                            "slow",
+                            "erratic",
+                            "speedrun",
+                            "stealth",
+                            "semi_auto",
+                            "trace_conditioned",
+                        ],
+                        weights=[0.06, 0.18, 0.04, 0.10, 0.05, 0.04, 0.25, 0.15, 0.13],
                     )[0]
                     print(f"  Mixed mode → {bot_type}")
 
@@ -2094,7 +2337,9 @@ def main():
                     if not args.replay_source:
                         print("Error: --replay-source required for replay bot")
                         return
-                    captured_sid = replay_bot(driver, args.replay_source, skip_honeypot=skip)
+                    captured_sid = replay_bot(
+                        driver, args.replay_source, skip_honeypot=skip
+                    )
                 elif bot_type == "tabber":
                     captured_sid = tabber_bot(driver, skip_honeypot=skip)
                 elif bot_type == "slow":
@@ -2121,8 +2366,9 @@ def main():
 
             # Auto-export telemetry and confirm as bot (skip if run failed)
             if run_succeeded:
-                _export_and_confirm(driver, i + 1, session_id=captured_sid,
-                                    bot_type=bot_type)
+                _export_and_confirm(
+                    driver, i + 1, session_id=captured_sid, bot_type=bot_type
+                )
             else:
                 print("  Skipping export — run did not complete successfully")
 
@@ -2133,7 +2379,7 @@ def main():
         print(f"\n{'='*50}")
         print("All runs complete!")
         print(f"Telemetry saved to: {DATA_DIR}")
-        print("="*50)
+        print("=" * 50)
         # Auto-close browser (no prompt) so chained commands run unattended
 
     finally:

@@ -24,10 +24,10 @@ import numpy as np
 
 from classifier.data_loader import Session
 
-
 # ---------------------------------------------------------------------------
 # Human profile
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class HumanProfile:
@@ -196,17 +196,18 @@ class HumanProfiler:
 # Augmentation configs for the three difficulty tiers
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AugmentConfig:
     """Parameters for a single augmentation difficulty level."""
 
     # --- Easy transforms ---
     fix_hold_durations: bool = True
-    jitter_std: float = 3.0       # px — Gaussian noise on mouse (x, y)
+    jitter_std: float = 3.0  # px — Gaussian noise on mouse (x, y)
 
     # --- Medium transforms (cumulative with easy) ---
     compress_timing: bool = False
-    timing_beta: float = 0.7      # blend factor: Δt' = β·Δt + (1-β)·μ_h
+    timing_beta: float = 0.7  # blend factor: Δt' = β·Δt + (1-β)·μ_h
     smooth_paths: bool = False
     smoothing_alpha: float = 0.8  # EMA coefficient: p' = α·p + (1-α)·p_prev
 
@@ -231,9 +232,9 @@ HARD_CONFIG = AugmentConfig(
     fix_hold_durations=True,
     jitter_std=1.0,
     compress_timing=True,
-    timing_beta=0.4,       # stronger compression toward human Δt
+    timing_beta=0.4,  # stronger compression toward human Δt
     smooth_paths=True,
-    smoothing_alpha=0.6,   # stronger path smoothing
+    smoothing_alpha=0.6,  # stronger path smoothing
 )
 
 LEVEL_CONFIGS = [
@@ -246,6 +247,7 @@ LEVEL_CONFIGS = [
 # ---------------------------------------------------------------------------
 # Per-session augmentation transforms
 # ---------------------------------------------------------------------------
+
 
 def _humanize_hold_durations(
     keystrokes: list[dict],
@@ -387,6 +389,7 @@ def augment_session(
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def adversarial_augment_sessions(
     bot_sessions: list[Session],
     human_sessions: list[Session],
@@ -424,12 +427,24 @@ def adversarial_augment_sessions(
     profile = profiler.fit(human_sessions)
     rng = np.random.RandomState(random_state)
 
-    print(f"  [HumanProfiler] Learned profile from {len(human_sessions)} human sessions:")
-    print(f"    key-hold   mean={profile.hold_mean:.1f} ms  std={profile.hold_std:.1f} ms")
-    print(f"    mouse dt   mean={profile.mouse_dt_mean:.1f} ms  std={profile.mouse_dt_std:.1f} ms")
-    print(f"    mouse spd  mean={profile.speed_mean:.0f} px/s  std={profile.speed_std:.0f} px/s")
-    print(f"    jitter     mean={profile.jitter_mean:.3f}  std={profile.jitter_std:.3f}")
-    print(f"    dir-change mean={profile.dir_change_mean:.3f}  std={profile.dir_change_std:.3f}")
+    print(
+        f"  [HumanProfiler] Learned profile from {len(human_sessions)} human sessions:"
+    )
+    print(
+        f"    key-hold   mean={profile.hold_mean:.1f} ms  std={profile.hold_std:.1f} ms"
+    )
+    print(
+        f"    mouse dt   mean={profile.mouse_dt_mean:.1f} ms  std={profile.mouse_dt_std:.1f} ms"
+    )
+    print(
+        f"    mouse spd  mean={profile.speed_mean:.0f} px/s  std={profile.speed_std:.0f} px/s"
+    )
+    print(
+        f"    jitter     mean={profile.jitter_mean:.3f}  std={profile.jitter_std:.3f}"
+    )
+    print(
+        f"    dir-change mean={profile.dir_change_mean:.3f}  std={profile.dir_change_std:.3f}"
+    )
 
     # Step 2: generate augmented copies at each level
     augmented: list[Session] = []

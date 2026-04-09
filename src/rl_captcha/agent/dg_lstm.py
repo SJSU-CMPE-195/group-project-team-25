@@ -38,8 +38,8 @@ from .ppo_lstm import PPOLSTM
 class DGConfig(PPOConfig):
     """PPO config extended with DG-specific hyperparameters."""
 
-    dg_temperature: float = 1.0       # η — controls sigmoid sharpness (paper uses 1.0)
-    dg_baseline_weight: float = 0.0   # blend: 0 = pure DG (paper default), 1 = pure PPO
+    dg_temperature: float = 1.0  # η — controls sigmoid sharpness (paper uses 1.0)
+    dg_baseline_weight: float = 0.0  # blend: 0 = pure DG (paper default), 1 = pure PPO
 
 
 class DGLSTM(PPOLSTM):
@@ -140,9 +140,10 @@ class DGLSTM(PPOLSTM):
                 if self.dg_baseline_weight > 0:
                     ratio = (new_log_probs - old_log_probs).exp()
                     surr1 = ratio * advantages
-                    surr2 = torch.clamp(
-                        ratio, 1.0 - cfg.clip_eps, 1.0 + cfg.clip_eps
-                    ) * advantages
+                    surr2 = (
+                        torch.clamp(ratio, 1.0 - cfg.clip_eps, 1.0 + cfg.clip_eps)
+                        * advantages
+                    )
                     ppo_loss = -torch.min(surr1, surr2).mean()
 
                     w = self.dg_baseline_weight
@@ -169,7 +170,8 @@ class DGLSTM(PPOLSTM):
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(
-                    self.network.parameters(), cfg.max_grad_norm,
+                    self.network.parameters(),
+                    cfg.max_grad_norm,
                 )
                 self.optimizer.step()
 

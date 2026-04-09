@@ -65,8 +65,7 @@ def init_database():
         cursor = conn.cursor()
 
         # Main checkout storage
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS checkouts (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 full_name VARCHAR(100),
@@ -80,12 +79,10 @@ def init_database():
                 zip_code VARCHAR(20),
                 timestamp DATETIME
             )
-            """
-        )
+            """)
 
         # Telemetry / interaction tracking
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_sessions (
                 session_id VARCHAR(64) PRIMARY KEY,
                 session_start DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -98,8 +95,7 @@ def init_database():
                 browser_info JSON,
                 session_metadata JSON
             )
-            """
-        )
+            """)
 
         conn.commit()
     finally:
@@ -245,8 +241,7 @@ def export_tracking_data_to_csv():
         conn = get_connection()
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT
                 session_id,
                 session_start,
@@ -260,8 +255,7 @@ def export_tracking_data_to_csv():
                 session_metadata
             FROM user_sessions
             ORDER BY session_start ASC
-            """
-        )
+            """)
         rows = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
     except Exception as e:

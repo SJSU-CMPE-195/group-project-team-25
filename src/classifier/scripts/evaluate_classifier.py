@@ -32,24 +32,32 @@ from classifier.model import HumanLikelihoodClassifier
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Evaluate human-likelihood classifier")
     p.add_argument(
-        "--model-dir", type=str, default="classifier/models/xgb_v1",
+        "--model-dir",
+        type=str,
+        default="classifier/models/xgb_v1",
         help="Directory containing the saved classifier",
     )
     p.add_argument(
-        "--data-dir", type=str, default="data/",
+        "--data-dir",
+        type=str,
+        default="data/",
         help="Path to data directory with human/ and bot/ subdirs",
     )
     p.add_argument(
-        "--threshold", type=float, default=0.5,
+        "--threshold",
+        type=float,
+        default=0.5,
         help="Decision threshold for human vs bot (default: 0.5)",
     )
     p.add_argument(
-        "--include-augmented", action="store_true",
+        "--include-augmented",
+        action="store_true",
         help="Include adversarially augmented bot sessions from data/bot_augmented/ "
-             "in the evaluation pool",
+        "in the evaluation pool",
     )
     p.add_argument(
-        "--verbose", action="store_true",
+        "--verbose",
+        action="store_true",
         help="Print per-session scores",
     )
     return p.parse_args()
@@ -84,18 +92,19 @@ def main() -> None:
     data_dir = Path(args.data_dir)
     print(f"[evaluate_classifier] Loading sessions from {data_dir.resolve()} ...")
     sessions = load_from_directory(data_dir, include_augmented=args.include_augmented)
-    labeled  = [s for s in sessions if s.label is not None]
+    labeled = [s for s in sessions if s.label is not None]
 
     if not labeled:
         print("ERROR: No labeled sessions found.")
         sys.exit(1)
 
     humans = [s for s in labeled if s.label == 1]
-    bots   = [s for s in labeled if s.label == 0]
+    bots = [s for s in labeled if s.label == 0]
     print(f"  Human sessions : {len(humans)}")
     print(f"  Bot sessions   : {len(bots)}")
     if args.include_augmented:
         from classifier.data_loader import is_augmented as _is_aug
+
         n_aug = sum(1 for s in labeled if _is_aug(s))
         print(f"  (of which {n_aug} are pre-generated augmented bot sessions)")
 
@@ -106,22 +115,27 @@ def main() -> None:
     X = extractor.extract_many(labeled)
     y_true = np.array([s.label for s in labeled], dtype=int)
 
-    y_score  = clf.human_score(X)
-    y_pred   = (y_score >= args.threshold).astype(int)
+    y_score = clf.human_score(X)
+    y_pred = (y_score >= args.threshold).astype(int)
 
     # ------------------------------------------------------------------
     # 4. Metrics
     # ------------------------------------------------------------------
     from sklearn.metrics import (
-        accuracy_score, precision_score, recall_score,
-        f1_score, roc_auc_score, confusion_matrix, classification_report,
+        accuracy_score,
+        precision_score,
+        recall_score,
+        f1_score,
+        roc_auc_score,
+        confusion_matrix,
+        classification_report,
         roc_curve,
     )
 
-    acc  = accuracy_score(y_true, y_pred)
+    acc = accuracy_score(y_true, y_pred)
     prec = precision_score(y_true, y_pred, zero_division=0)
-    rec  = recall_score(y_true, y_pred, zero_division=0)
-    f1   = f1_score(y_true, y_pred, zero_division=0)
+    rec = recall_score(y_true, y_pred, zero_division=0)
+    f1 = f1_score(y_true, y_pred, zero_division=0)
     try:
         auc = roc_auc_score(y_true, y_score)
     except ValueError:
@@ -143,17 +157,23 @@ def main() -> None:
 
     false_positive_rate = cm[1][0] / max(cm[1].sum(), 1)
     false_negative_rate = cm[0][1] / max(cm[0].sum(), 1)
-    print(f"\n  False positive rate (humans wrongly blocked): {false_positive_rate:.2%}")
+    print(
+        f"\n  False positive rate (humans wrongly blocked): {false_positive_rate:.2%}"
+    )
     print(f"  False negative rate (bots wrongly allowed) : {false_negative_rate:.2%}")
 
     print()
-    print(classification_report(y_true, y_pred, target_names=["bot", "human"], zero_division=0))
+    print(
+        classification_report(
+            y_true, y_pred, target_names=["bot", "human"], zero_division=0
+        )
+    )
 
     # ------------------------------------------------------------------
     # 5. Score distribution
     # ------------------------------------------------------------------
     human_scores = y_score[y_true == 1].tolist()
-    bot_scores   = y_score[y_true == 0].tolist()
+    bot_scores = y_score[y_true == 0].tolist()
 
     if human_scores:
         print("--- Human score distribution ---")
@@ -181,7 +201,9 @@ def main() -> None:
     for i in range(2):
         for j in range(2):
             color = "white" if cm[i, j] > cm.max() / 2 else "black"
-            ax.text(j, i, str(cm[i, j]), ha="center", va="center", color=color, fontsize=16)
+            ax.text(
+                j, i, str(cm[i, j]), ha="center", va="center", color=color, fontsize=16
+            )
 
     # 6b. ROC curve
     ax = axes[0, 1]
@@ -201,10 +223,25 @@ def main() -> None:
     # 6c. Score distribution histogram
     ax = axes[1, 0]
     if human_scores:
-        ax.hist(human_scores, bins=20, range=(0, 1), alpha=0.6, label="Human", color="steelblue")
+        ax.hist(
+            human_scores,
+            bins=20,
+            range=(0, 1),
+            alpha=0.6,
+            label="Human",
+            color="steelblue",
+        )
     if bot_scores:
-        ax.hist(bot_scores, bins=20, range=(0, 1), alpha=0.6, label="Bot", color="tomato")
-    ax.axvline(x=args.threshold, color="black", linestyle="--", lw=1, label=f"Threshold={args.threshold}")
+        ax.hist(
+            bot_scores, bins=20, range=(0, 1), alpha=0.6, label="Bot", color="tomato"
+        )
+    ax.axvline(
+        x=args.threshold,
+        color="black",
+        linestyle="--",
+        lw=1,
+        label=f"Threshold={args.threshold}",
+    )
     ax.set_xlabel("Human-Likelihood Score")
     ax.set_ylabel("Count")
     ax.set_title("Score Distribution")
@@ -221,10 +258,15 @@ def main() -> None:
     ax.set_xlabel("Importance")
     ax.set_title("Top 10 Feature Importances")
 
-    fig.suptitle(f"Classifier Evaluation  (n={len(labeled)}, threshold={args.threshold})", fontsize=14)
+    fig.suptitle(
+        f"Classifier Evaluation  (n={len(labeled)}, threshold={args.threshold})",
+        fontsize=14,
+    )
     fig.tight_layout()
     plt.savefig(Path(args.model_dir) / "evaluation_plots.png", dpi=150)
-    print(f"\n[evaluate_classifier] Plots saved to {(Path(args.model_dir) / 'evaluation_plots.png').resolve()}")
+    print(
+        f"\n[evaluate_classifier] Plots saved to {(Path(args.model_dir) / 'evaluation_plots.png').resolve()}"
+    )
     plt.show()
 
     # ------------------------------------------------------------------
@@ -232,12 +274,14 @@ def main() -> None:
     # ------------------------------------------------------------------
     if args.verbose:
         print("\n--- Per-session scores ---")
-        print(f"  {'Session ID':<40s} {'True':>6} {'Score':>7} {'Pred':>6} {'Correct':>8}")
+        print(
+            f"  {'Session ID':<40s} {'True':>6} {'Score':>7} {'Pred':>6} {'Correct':>8}"
+        )
         print("  " + "-" * 75)
         for session, score, pred, true in zip(labeled, y_score, y_pred, y_true):
             label_str = "human" if true == 1 else "bot"
-            pred_str  = "human" if pred == 1 else "bot"
-            correct   = "OK" if pred == true else "WRONG"
+            pred_str = "human" if pred == 1 else "bot"
+            correct = "OK" if pred == true else "WRONG"
             print(
                 f"  {session.session_id:<40s} {label_str:>6} "
                 f"{score:>7.4f} {pred_str:>6} {correct:>8}"

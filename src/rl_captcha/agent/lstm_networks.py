@@ -4,10 +4,11 @@ from typing import Tuple, Optional
 import torch
 import torch.nn as nn
 
+
 # inherit from nn.module (it is a pytorch neural network module)
 class LSTMActorCritic(nn.Module):
-   
-   # building the neural network parts
+
+    # building the neural network parts
     def __init__(
         self,
         input_dim: int = 26,
@@ -20,10 +21,10 @@ class LSTMActorCritic(nn.Module):
         self.num_layers = num_layers
 
         self.lstm = nn.LSTM(
-            input_size = input_dim,
-            hidden_size = hidden_size,
-            num_layers = num_layers,
-            batch_first = True,
+            input_size=input_dim,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
         )
 
         self.lstm_dropout = nn.Dropout(0.1) if num_layers > 1 else nn.Identity()
@@ -43,17 +44,17 @@ class LSTMActorCritic(nn.Module):
             nn.Tanh(),
             nn.Linear(64, 1),
         )
-    
+
     # hidden compressed memory
     def init_hidden(
         self,
         batch_size: int = 1,
         device: torch.device | str = "cpu",
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        h = torch.zeros(self.num_layers, batch_size, self.hidden_size, device = device)
-        c = torch.zeros(self.num_layers, batch_size, self.hidden_size, device = device)
-        return (h,c)
-    
+        h = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
+        c = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
+        return (h, c)
+
     # forward pass
     def forward(
         self,
@@ -81,4 +82,3 @@ class LSTMActorCritic(nn.Module):
             logits = logits.masked_fill(action_mask == 0, float("-inf"))
 
         return logits, values, new_hidden
-    

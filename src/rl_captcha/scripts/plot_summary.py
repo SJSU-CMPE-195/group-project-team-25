@@ -19,16 +19,18 @@ from rl_captcha.scripts.plot_eval import parse_log as parse_eval_log
 
 
 def build_summary(train_rollouts: list[dict], eval_result: dict, out_path: Path):
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.size": 11,
-        "axes.titlesize": 13,
-        "axes.labelsize": 12,
-        "legend.fontsize": 10,
-        "figure.dpi": 300,
-        "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.2,
-    })
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.size": 11,
+            "axes.titlesize": 13,
+            "axes.labelsize": 12,
+            "legend.fontsize": 10,
+            "figure.dpi": 300,
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.2,
+        }
+    )
 
     fig, (ax_acc, ax_cm) = plt.subplots(2, 1, figsize=(7, 10))
     fig.suptitle("PPO+LSTM Bot Detection", fontsize=15, fontweight="bold", y=0.98)
@@ -39,13 +41,18 @@ def build_summary(train_rollouts: list[dict], eval_result: dict, out_path: Path)
     correct_pcts = []
     for r in train_rollouts:
         oc = r.get("outcomes", {})
-        correct = (oc.get("correct_allow", 0) + oc.get("correct_block", 0)
-                   + oc.get("bot_blocked_puzzle", 0))
+        correct = (
+            oc.get("correct_allow", 0)
+            + oc.get("correct_block", 0)
+            + oc.get("bot_blocked_puzzle", 0)
+        )
         correct_pcts.append(correct)
     correct_arr = np.array(correct_pcts)
 
     ax_acc.plot(steps_k, correct_arr, alpha=0.15, color="#27ae60", linewidth=0.8)
-    ax_acc.plot(steps_k, smooth(correct_arr, 10), color="#27ae60", linewidth=2.2, label="Train")
+    ax_acc.plot(
+        steps_k, smooth(correct_arr, 10), color="#27ae60", linewidth=2.2, label="Train"
+    )
 
     val_steps_k, val_accs = [], []
     for r in train_rollouts:
@@ -53,8 +60,15 @@ def build_summary(train_rollouts: list[dict], eval_result: dict, out_path: Path)
             val_steps_k.append(r["steps"] / 1000)
             val_accs.append(r["val_accuracy"] * 100)
     if val_steps_k:
-        ax_acc.plot(val_steps_k, val_accs, "o-", color="#e74c3c", linewidth=2,
-                    markersize=4, label="Validation")
+        ax_acc.plot(
+            val_steps_k,
+            val_accs,
+            "o-",
+            color="#e74c3c",
+            linewidth=2,
+            markersize=4,
+            label="Validation",
+        )
 
     ax_acc.set_xlabel("Training Steps (×1K)")
     ax_acc.set_ylabel("Correct Decisions (%)")
@@ -84,8 +98,16 @@ def build_summary(train_rollouts: list[dict], eval_result: dict, out_path: Path)
             val = cm[i, j]
             pct = cm_pct[i, j]
             color = "white" if pct > cm_pct.max() * 0.6 else "black"
-            ax_cm.text(j, i, f"{val}\n({pct:.1f}%)", ha="center", va="center",
-                       fontsize=14, fontweight="bold", color=color)
+            ax_cm.text(
+                j,
+                i,
+                f"{val}\n({pct:.1f}%)",
+                ha="center",
+                va="center",
+                fontsize=14,
+                fontweight="bold",
+                color=color,
+            )
     ax_cm.set_title(f"Confusion Matrix — {split_name} Split")
     fig.colorbar(im, ax=ax_cm, label="% of episodes", shrink=0.8)
 
@@ -97,7 +119,9 @@ def build_summary(train_rollouts: list[dict], eval_result: dict, out_path: Path)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Concise 2-panel training+eval summary")
+    parser = argparse.ArgumentParser(
+        description="Concise 2-panel training+eval summary"
+    )
     parser.add_argument("--train-log", type=str, required=True)
     parser.add_argument("--eval-log", type=str, required=True)
     parser.add_argument("--out", type=str, default="figures/summary.png")
@@ -107,17 +131,21 @@ def main():
     eval_path = Path(args.eval_log)
 
     if not train_path.exists():
-        print(f"Error: {train_path} not found"); return
+        print(f"Error: {train_path} not found")
+        return
     if not eval_path.exists():
-        print(f"Error: {eval_path} not found"); return
+        print(f"Error: {eval_path} not found")
+        return
 
     rollouts = parse_train_log(str(train_path))
     if not rollouts:
-        print("No training data found."); return
+        print("No training data found.")
+        return
 
     eval_result = parse_eval_log(str(eval_path))
     if not eval_result.get("accuracy"):
-        print("No evaluation data found."); return
+        print("No evaluation data found.")
+        return
 
     build_summary(rollouts, eval_result, Path(args.out))
 
