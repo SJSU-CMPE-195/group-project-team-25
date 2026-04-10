@@ -1,51 +1,19 @@
-import { render, screen, within, fireEvent } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { vi, describe, test, expect } from "vitest";
-import SeatSelection from "@/pages/SeatSelection";
-import Home from "@/pages/Home";
-import Checkout from "@/pages/Checkout";
 import { concertsById } from "@/assets/concerts";
+import { renderRouterPages } from "./utils/renderRouterPages";
 
-vi.mock("@/assets/concerts", () => ({
-  concertsById: {
-    1: {
-      id: 1,
-      name: "Chappell Roan",
-      date: "Feb 14, 2026",
-      eventName: "Midwest Princess Tour",
-      venue: "Aragon Ballroom",
-      city: "Chicago, IL",
-      location: "Chicago, IL • Aragon Ballroom",
-      image: "/chappellImg.jpg",
-      price: 100,
-    },
-  },
-  concerts: [
-    {
-      id: 1,
-      name: 'Chappell Roan',
-      date: 'Feb 14, 2026',
-      eventName: 'Midwest Princess Tour',
-      venue: 'Aragon Ballroom',
-      city: 'Chicago, IL',
-      location: 'Chicago, IL • Aragon Ballroom',
-      image: "/chappellImg.jpg",
-      price: 100,
-    },
-  ],
-}));
+vi.mock("@/assets/concerts", async () => {
+  const mod = await import("./fixtures/concerts");
+  return {
+    concerts: mod.mockConcerts,
+    concertsById: mod.mockConcertsById,
+  };
+});
 
 function renderPage() {
-  return render(
-    <MemoryRouter initialEntries={["/seat-selection/1"]}>
-      <Routes>
-        <Route path="/seat-selection/:concertId" element={<SeatSelection />} />
-        <Route path="/" element={<Home />} />
-        <Route path="/checkout" element={<Checkout />} />
-      </Routes>
-    </MemoryRouter>
-  );
+  return renderRouterPages({ initialEntries: ["/seats/1"] });
 }
 
 describe("SeatSelection", () => {
