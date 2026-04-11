@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 import mysql.connector
 
-from config import get_db_config
+from .config import get_db_config
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")

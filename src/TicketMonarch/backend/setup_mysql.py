@@ -18,7 +18,7 @@ import re
 
 import mysql.connector
 
-from config import get_db_config
+from .config import get_db_config
 
 
 def create_database_if_not_exists():

@@ -106,7 +106,8 @@ Open **two terminals** (activate the venv in each if running Python):
 # Terminal 1 — Backend (http://localhost:5000)
 # Set RL_ALGORITHM to ppo, dg, or soft_ppo (defaults to ppo)
 set RL_ALGORITHM=dg          # PowerShell: $env:RL_ALGORITHM="dg"
-python TicketMonarch/backend/app.py
+cd .. #Should be in the project_root/src/ directory
+python -m TicketMonarch.backend.app
 
 # Terminal 2 — Frontend (http://localhost:3000)
 cd TicketMonarch/frontend

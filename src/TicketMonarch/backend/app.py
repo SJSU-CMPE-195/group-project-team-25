@@ -6,7 +6,7 @@ from pathlib import Path
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from database import (
+from .database import (
     init_database,
     save_order,
     export_to_csv,
@@ -23,7 +23,7 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from agent_service import get_agent_service as _init_agent_service
+from .agent_service import get_agent_service as _init_agent_service
 
 # Agent loads once at startup — guaranteed ready before any request.
 print("[startup] Loading RL agent (PyTorch + LSTM checkpoint)...")
@@ -37,7 +37,7 @@ def _get_agent_service():
 
 
 def _ACTION_NAMES():
-    from agent_service import ACTION_NAMES
+    from .agent_service import ACTION_NAMES
 
     return ACTION_NAMES
 
