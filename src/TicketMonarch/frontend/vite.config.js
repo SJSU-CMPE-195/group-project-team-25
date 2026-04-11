@@ -23,5 +23,11 @@ export default defineConfig({
     globals: true,
     setupFiles: 'tests/setupTests.js',
     include: ['tests/unit/**/*.test.jsx'],
+    coverage: {
+      exclude: [
+        'src/assets/**',
+        '**/*.css'
+      ]
+    }
   },
 })

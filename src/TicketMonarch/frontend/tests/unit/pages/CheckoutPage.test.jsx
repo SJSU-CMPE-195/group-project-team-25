@@ -341,7 +341,7 @@ describe("Checkout", () => {
    Checkout and Challenge flow
    ========================= */
   describe("checkout and challenge flow", () => {
-  test("checkout works if not suspected", async () => {
+    test("checkout works if not suspected", async () => {
       renderPage()
       const user = userEvent.setup()
 
