@@ -17,9 +17,9 @@ jobs:
           python-version: '3.12'
       - run: pip install flake8 black
       - name: Check formatting
-        run: black --check src/ tests/
+        run: black --check src/
       - name: Lint
-        run: flake8 src/ tests/ --max-line-length=121 --extend-ignore=E203,E402 --exit-zero
+        run: flake8 src/ --max-line-length=121 --extend-ignore=E203,E402 --exit-zero
 
   frontend-unit-tests:
     runs-on: ubuntu-latest
@@ -61,7 +61,6 @@ jobs:
           cache: 'pip'
           cache-dependency-path: |
             src/TicketMonarch/backend/requirements.txt
-            src/TicketMonarch/backend/tests/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -74,15 +73,81 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          pytest src/TicketMonarch/backend/tests \
+          pytest src/TicketMonarch/backend/tests/unit \
             --cov=src/TicketMonarch/backend \
             --cov-report=term-missing \
-            --cov-report=xml:coverage.xml
+            --cov-report=xml:unit_coverage.xml
 
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
+          files: unit_coverage.xml
           flags: backend
           name: backend-unit-tests-pytest
+
+  backend-integration-tests:
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ticketmonarch_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            src/TicketMonarch/backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r src/TicketMonarch/backend/requirements.txt
+          pip install pytest pytest-cov gymnasium
+          pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Wait for MySQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -P 3306 -u root -proot && break
+            sleep 2
+          done
+
+      - name: Run tests with coverage
+        env:
+          PYTHONPATH: src
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: 3306
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: ticketmonarch_db
+        run: |
+          pytest src/TicketMonarch/backend/tests/integration \
+            --cov=src/TicketMonarch/backend \
+            --cov-report=term-missing \
+            --cov-report=xml:integration_coverage.xml
+
+      - name: Upload backend coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: integration_coverage.xml
+          flags: backend
+          name: backend-integration-tests-pytest

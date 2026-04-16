@@ -30,6 +30,10 @@
 
 ---
 
+## Demo Notebooks
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -142,6 +146,30 @@ Open **http://localhost:3000/dev** in a separate tab.
 - Frontend telemetry batches are re-queued on failed network writes instead of being dropped.
 - Bot generators were toned down so bot sessions better resemble real checkout flows.
 - Because telemetry semantics changed, the previous JSON training set was cleared. Recollect fresh human and bot data before retraining.
+---
+
+## Testing
+
+Unit test cases are under src/TicketMonarch/frontend/tests/unit and src/TicketMonarch/backend/tests/unit
+Integration test are src/TicketMonarch/backend/tests/integration
+
+### Running frontend tests
+Under src/TicketMonarch/frontend
+```
+npm test
+```
+
+### Running backend tests
+```
+pip install pytest pytest-cov gymnasium
+pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+```
+
+Under project root
+```
+$env:PYTHONPATH = "src"
+pytest  --cov=src/TicketMonarch/backend --cov-report=term-missing
+```
 ---
 
 ## API Reference
