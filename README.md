@@ -32,11 +32,20 @@
 
 ## Demo Notebooks
 
+### RL Model
+
 End-to-end walkthroughs of the RL pipeline — data loading, training PPO/DG/Soft-PPO agents on collected human + bot telemetry, evaluation, and figure generation. Useful for quickly understanding how the agents are trained and how the augmented bot data affects performance, without spinning up the full web app.
 
 - [src/rl_algorithms.ipynb](src/rl_algorithms.ipynb) — clean source notebook (no outputs). Run this fresh to reproduce results.
 - [src/rl_algorithms_executed.ipynb](src/rl_algorithms_executed.ipynb) — pre-run snapshot with all plots and outputs baked in. View this if you just want to see results without re-running.
 
+
+### Classification Model
+
+An entire classification model using the XGBoost algorithm includes data loading, feature extraction, training models with different variations, evaluation for each model, and figure generation. Used as a benchmark for the RL model where they have to classify if the current session is a bot or a human. 
+
+- [src/classifier_training.ipynb](src/classifier_training.ipynb) — clean source notebook (no outputs). Run this fresh to reproduce results.
+- [src/classifier_training_executed.ipynb](src/classifier_training_executed.ipynb) — pre-run snapshot with all plots and outputs baked in. View this if you just want to see results without re-running.
 ---
 
 ## Getting Started
